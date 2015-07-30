@@ -5,7 +5,7 @@ from __future__ import division
 import networkx as nx
 import random
 from greedy import greedy
-from heuristics import ffc
+from heuristics import *
 from runMC import run_mc
 __author__ = 'sivanov'
 
@@ -34,18 +34,26 @@ if __name__ == "__main__":
 
     G = read_graph("datasets/Wiki-Vote_graph.txt", True)
     L = read_likes("datasets/Wiki-Vote_likes.txt")
-    S = random.sample(G.nodes(), 10)
     K = 5
     R = 100
 
-    f1 = greedy(G, L, S, K, R)
-    f2 = ffc(G, L, S, K)
-    print sorted(f1)
-    print sorted(f2)
+    count = 0
+    for _ in range(10):
+        S = random.sample(G.nodes(), 50)
+        f1 = greedy(G, L, S, K, R)
+        f2 = ffc(G, L, S, K)
+        f3 = mcf(L, K)
+        print sorted(f1)
+        print sorted(f2)
+        print sorted(f3)
 
-    spread1 = run_mc(G, L, S, f1, R)
-    spread2 = run_mc(G, L, S, f2, R)
+        spread1 = run_mc(G, L, S, f1, R)
+        spread2 = run_mc(G, L, S, f2, R)
+        spread3 = run_mc(G, L, S, f3, R)
 
-    print spread1, spread2
+        print spread1, spread2, spread3
+        if spread1 > spread2 and spread1 > spread3:
+            count += 1
+    print count
 
     console = []
