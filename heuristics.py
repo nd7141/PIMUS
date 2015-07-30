@@ -5,6 +5,7 @@ from __future__ import division
 __author__ = 'sivanov'
 import itertools
 import collections
+import random
 
 
 def ffc(G, L, S, K):
@@ -17,8 +18,6 @@ def ffc(G, L, S, K):
     :param K:
     :return:
     """
-    print 'Starting First Friends Common heuristic...'
-    print 'Selected nodes: ',
     ff = set()
     for node in S:
         ff.update(G[node])
@@ -27,7 +26,6 @@ def ffc(G, L, S, K):
         for feat in L[friend]:
             common[feat] = common.get(feat, 0) + 1
     chosen = sorted(common.iteritems(), key=lambda (dk, dv): dv, reverse=True)[:K]
-    print ' '.join([f for (f, l) in chosen])
     return [f for (f, l) in chosen]
 
 
@@ -40,11 +38,19 @@ def mcf(L, K):
     :param L:
     :return:
     """
-    print 'Starting First Friends Common heuristic...'
-    print 'Selected nodes: ',
     F = list(itertools.chain.from_iterable(L.values()))
-    print ' '.join([f for (f, c) in collections.Counter(F).most_common(K)])
     return [f for (f, c) in collections.Counter(F).most_common(K)]
+
+
+def rf(L, K):
+    """
+    Random selects K random features.
+    :param L:
+    :param K:
+    :return:
+    """
+    F = set(list(itertools.chain.from_iterable(L.values())))
+    return random.sample(F, K)
 
 
 if __name__ == "__main__":
