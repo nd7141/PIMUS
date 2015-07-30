@@ -5,6 +5,8 @@ from __future__ import division
 import networkx as nx
 import random
 from greedy import greedy
+from heuristics import ffc
+from runMC import run_mc
 __author__ = 'sivanov'
 
 
@@ -36,7 +38,14 @@ if __name__ == "__main__":
     K = 5
     R = 100
 
-    features = greedy(G, L, S, K, R)
-    print features
+    f1 = greedy(G, L, S, K, R)
+    f2 = ffc(G, L, S, K)
+    print sorted(f1)
+    print sorted(f2)
+
+    spread1 = run_mc(G, L, S, f1, R)
+    spread2 = run_mc(G, L, S, f2, R)
+
+    print spread1, spread2
 
     console = []
