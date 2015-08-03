@@ -3,14 +3,17 @@
 '''
 from __future__ import division
 import itertools
-from runMC import run_mc
+from runMC import run_ic, run_lt
 __author__ = 'sivanov'
 
 
-def max_feat(G, L, S, features, R, F):
+def max_feat(G, L, S, features, R, F, IC):
     best_feat_spread = 0
     for feat in F:
-        spread = run_mc(G, L, S, features + [feat], R)
+        if IC:
+            spread = run_ic(G, L, S, features + [feat], R)
+        else:
+            spread = run_lt(G, L, S, features + [feat], R)
         if spread > best_feat_spread:
             best_feat = feat
             best_feat_spread = spread
@@ -18,7 +21,7 @@ def max_feat(G, L, S, features, R, F):
     return best_feat
 
 
-def greedy(G, L, S, K, R):
+def greedy(G, L, S, K, R, IC=True):
     """
     :param G: a graph with probabilities on edges
     :param L: map of a user to its likes
@@ -30,9 +33,9 @@ def greedy(G, L, S, K, R):
     print 'Starting greedy selection...'
     F = set(list(itertools.chain.from_iterable(L.values())))
     features = []
-    print 'Selected nodes: ',
+    print 'Selected features: ',
     while len(features) < K:
-        feat = max_feat(G, L, S, features, R, F)
+        feat = max_feat(G, L, S, features, R, F, IC)
         F.remove(feat)
         assert feat not in features
         features.append(feat)

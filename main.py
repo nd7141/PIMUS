@@ -3,10 +3,10 @@
 '''
 from __future__ import division
 import networkx as nx
-import random
 from greedy import greedy
 from heuristics import *
-from runMC import run_mc
+from runMC import run_ic, run_lt
+import comparison
 __author__ = 'sivanov'
 
 
@@ -15,10 +15,18 @@ def read_graph(filename, directed=False):
         G = nx.DiGraph()
     else:
         G = nx.Graph()
+    old2new = dict()
+    count = 0
     with open(filename) as f:
         for line in f:
             d = line.split()
-            G.add_edge(int(d[0]), int(d[1]), weight=float(d[2]))
+            if int(d[0]) not in old2new:
+                old2new[int(d[0])] = count
+                count += 1
+            if int(d[1]) not in old2new:
+                old2new[int(d[1])] = count
+                count += 1
+            G.add_edge(old2new[int(d[0])], old2new[int(d[1])], weight=float(d[2]))
     return G
 
 
@@ -32,28 +40,31 @@ def read_likes(filename):
 
 if __name__ == "__main__":
 
-    G = read_graph("datasets/Wiki-Vote_graph.txt", True)
+    G = read_graph("datasets/Wiki-Vote_graph_ic.txt", True)
     L = read_likes("datasets/Wiki-Vote_likes.txt")
-    K = 5
+    K = 30
     R = 100
 
+    #comparison of PIMUS to IM
+    # S = random.sample(G, 50)
+    # f = greedy(G, L, S, K, R, False)
+    # print 'PIMUS spread:', run_lt(G, L, S, f, R)
+
+    # S = comparison.greedy_im(G, 5, R)
+    # print 'IM spread:', comparison.run_ic(G, S, R)
+
+    # comparison of different PIMUS algorithms
+    l = 20
     count = 0
-    for _ in range(10):
+    spread = 0
+    for _ in range(l):
         S = random.sample(G.nodes(), 50)
         f1 = greedy(G, L, S, K, R)
-        f2 = ffc(G, L, S, K)
-        f3 = mcf(L, K)
         print sorted(f1)
-        print sorted(f2)
-        print sorted(f3)
 
-        spread1 = run_mc(G, L, S, f1, R)
-        spread2 = run_mc(G, L, S, f2, R)
-        spread3 = run_mc(G, L, S, f3, R)
-
-        print spread1, spread2, spread3
-        if spread1 > spread2 and spread1 > spread3:
-            count += 1
-    print count
+        spread += run_ic(G, L, S, f1, R)
+    print 'Average spread:', spread/l
+    with open('data/spread{0}.txt'.format(K), 'w+') as f:
+        f.write("{0}".format(spread/l))
 
     console = []

@@ -56,6 +56,4 @@ def run_lt(G, L, S, features, R):
     return spread/R
 
 if __name__ == "__main__":
-
-
     console = []
