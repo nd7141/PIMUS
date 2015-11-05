@@ -159,6 +159,40 @@ def greedy(G, B, Q, P, Ef, S, Phi, K, I):
         increase_probabilities(G, B, Q, F + [max_feature], Ef[max_feature], P)
     return F
 
+def initialize_pi(G, P, S, theta):
+    Pi_nodes = set()
+    for v in S:
+        Pi_nodes.add(v)
+        crossing_edges = set([out_edge for out_edge in G.out_edges([v]) if out_edge[1] not in S + [v]])
+        edge_weights = dict()
+        dist = {v: 0} # shortest paths from the root v
+
+        while crossing_edges:
+            # Dijkstra's greedy criteria
+            min_dist = float("Inf")
+            sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
+            for edge in sorted_crossing_edges:
+                if edge not in edge_weights:
+                    edge_weights[edge] = -math.log(float(P.loc[edge]))
+                edge_weight = edge_weights[edge]
+                if dist[edge[0]] + edge_weight < min_dist:
+                    min_dist = dist[edge[0]] + edge_weight
+                    min_edge = edge
+            # check stopping criteria
+            if min_dist < -math.log(theta):
+                dist[min_edge[1]] = min_dist
+                Pi_nodes.add(min_edge[1])
+                # update crossing edges
+                crossing_edges.difference_update(G.in_edges(min_edge[1]))
+                crossing_edges.update([out_edge for out_edge in G.out_edges(min_edge[1])
+                                       if (out_edge[1] not in Pi_nodes) and (out_edge[1] not in S)])
+            else:
+                break
+    Pi = set()
+    for node in Pi_nodes:
+        Pi.update(G.in_edges(node))
+        Pi.update(G.out_edges(node))
+    return Pi
 
 def explore(G, P, S, theta):
     """
@@ -237,6 +271,9 @@ def update(Ain, S, P):
     """
     return sum([calculate_ap(u, Ain[u], S, P) for u in Ain])
 
+def explore_update(G, B, Q, S, theta):
+    P = B.copy()
+
 
 if __name__ == "__main__":
 
@@ -256,15 +293,19 @@ if __name__ == "__main__":
     # features = greedy(G, B, Q, P, Ef, S, Phi, 5, 10)
     # print time.time() - start
 
-    theta = 1./2000
-    S = [0, 5, 10]
-    start = time.time()
-    Ain = explore(G, P, S, theta)
-    print time.time() - start
-    print len(Ain)
+    S = [0]
+    Pi = initialize_pi(G, P, S, 1./320)
+    Ain = explore(G, P, S, 1./320)
 
-    print update(Ain, S, P)
-    print calculate_MC_spread(G, S, P, 10)
+    # theta = 1./2000
+    # S = [0, 5, 10]
+    # start = time.time()
+    # Ain = explore(G, P, S, theta)
+    # print time.time() - start
+    # print len(Ain)
+    #
+    # print update(Ain, S, P)
+    # print calculate_MC_spread(G, S, P, 10)
 
 
     console = []
