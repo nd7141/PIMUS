@@ -5,6 +5,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import time
+import random
 
 def read_graph(filename, directed=True, sep=' ', header = None):
     """
@@ -69,6 +70,7 @@ def read_probabilities(filename, sep=' '):
 
 def increase_probabilities(G, B, Q, F, E, P):
     """
+    Increase probabilities of edges E depending on selected features F. Returns previous probabilities of changed edges.
     :param G: graph that has nodes attributes as features for nodes
     :param B: dataframe indexed by two endpoints of edge: base probabilities on edges
     :param Q: dataframe indexed by two endpoints of edge: product probabilities on edges
@@ -88,8 +90,45 @@ def increase_probabilities(G, B, Q, F, E, P):
     return changed
 
 def decrease_probabilities(changed, P):
+    """
+    Decrease probabilities of changed edges.
+    :param changed: edge (u,v) -> probability
+    :param P: dataframe with probabilities on edges
+    :return:
+    """
     for e in changed:
         P.loc[e] = changed[e]
+
+def calculate_MC_spread(G, S, P, I):
+    """
+    Returns influence spread in IC model from S with features F using I Monte-Carlo simulations.
+    :param G: networkx graph
+    :param S: list of seed set
+    :param P: dataframe of probabilities
+    :param I: integer of number of MC iterations
+    :return: influence spread
+    """
+    spread = 0.
+    for _ in range(I):
+        print 'I:', _,
+        activated = dict(zip(G.nodes(), [False]*len(G)))
+        for node in S:
+            activated[node] = True
+        T = [node for node in S]
+        i = 0
+        while i < len(T):
+            v = T[i]
+            for neighbor in G[v]:
+                if not activated[neighbor]:
+                    prob = float(P.loc[v, neighbor])
+                    if random.random() < prob:
+                        activated[neighbor] = True
+                        T.append(neighbor)
+            i += 1
+        print len(T)
+        spread += len(T)
+    return spread/I
+
 
 if __name__ == "__main__":
 
@@ -110,4 +149,7 @@ if __name__ == "__main__":
     f2 = '115'
     F.append(f2)
     changed = increase_probabilities(G, B, Q, F, Ef[f2], P)
+
+
+
     console = []
