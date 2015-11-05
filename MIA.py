@@ -40,7 +40,7 @@ def read_graph2(filename, directed=False):
 
 def add_graph_attributes(G, filename):
     """
-    Add features as node attributes and construct a Ef
+    Add features as node attributes and construct feature -> edges
     :param G: networkx graph
     :param filename: (u f1 f2 f3 ...); u is mandatory in graph -- the node
     f1 f2 f3 ... - arbitrary number of features
@@ -67,7 +67,7 @@ def read_probabilities(filename, sep=' '):
     df = pd.read_csv(filename, sep=sep, header = None)
     return df.set_index([0, 1])
 
-def update_probabilities(G, B, Q, F, E, K, P):
+def increase_probabilities(G, B, Q, F, E, P):
     """
     :param G: graph that has nodes attributes as features for nodes
     :param B: dataframe indexed by two endpoints of edge: base probabilities on edges
@@ -78,11 +78,18 @@ def update_probabilities(G, B, Q, F, E, K, P):
     :param P: final probabilities on edges (updated only Ef)
     :return:
     """
+    changed = dict() # changed edges and its previous probabilities
     for e in E:
-        hF = len(set(F).intersection(G.node[e[1]]['Fu']))/K # function h(F)
+        changed[e] = float(P.loc[e]) # remember what edges changed
+        hF = len(set(F).intersection(G.node[e[1]]['Fu']))/len(G.node[e[1]]['Fu']) # function h(F)
         q = float(Q.loc[e])
         b = float(B.loc[e])
-        P[e] = hF*q + b # final probabilities p = h(F)*q + b
+        P.loc[e] = hF*q + b # final probabilities p = h(F)*q + b
+    return changed
+
+def decrease_probabilities(changed, P):
+    for e in changed:
+        P.loc[e] = changed[e]
 
 if __name__ == "__main__":
 
@@ -92,18 +99,15 @@ if __name__ == "__main__":
     B = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
     Q = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
 
-    # intialize
-    P = dict()
-    start = time.time()
-    # TODO initialize by reading a file, maybe P making pandas dataframe
-    update_probabilities(G, B, Q, [], G.edges(), 1, P)
-    print time.time() - start
-    print P[(0, 1)]
+    # intialize edge probabilities
+    P = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
+    F = []
 
-    # TODO rewrite reading graph using 'datasets/Wiki-Vote_graph_ic.txt' with third parameter. Then add headers. Add to from_pandas third parameter. Second, read filegraph
+    f = '126' # a feature with the smallest affected edges
+    F.append(f)
+    changed = increase_probabilities(G, B, Q,  F, Ef[f], P)
 
-
-    # f = np.random.choice(Ef.keys())
-    # F = [f]
-
+    f2 = '115'
+    F.append(f2)
+    changed = increase_probabilities(G, B, Q, F, Ef[f2], P)
     console = []
