@@ -111,7 +111,7 @@ def calculate_MC_spread(G, S, P, I):
     """
     spread = 0.
     for _ in range(I):
-        # print 'I:', _,
+        print 'I:', _,
         activated = dict(zip(G.nodes(), [False]*len(G)))
         for node in S:
             activated[node] = True
@@ -126,7 +126,7 @@ def calculate_MC_spread(G, S, P, I):
                         activated[neighbor] = True
                         T.append(neighbor)
             i += 1
-        # print len(T)
+        print len(T)
         spread += len(T)
     return spread/I
 
@@ -206,7 +206,36 @@ def explore(G, P, S, theta):
                     Ain[u].add_edges_from(MIPs[u])
     return Ain
 
+def calculate_ap(u, Ain_v, S, P):
+    """
+    Calculate activation probability of u in in-arborescence of v.
+    :param u: node in networkx graph
+    :param Ain_v: networkx graph
+    :param S: list of seed set
+    :param P: dataframe of edge probabilities
+    :return: float of activation probability
+    """
+    if u in S:
+        return 1
+    elif not Ain_v.in_edges(u):
+        return 0
+    else:
+        prod = 1
+        for e in Ain_v.in_edges(u):
+            w = e[0]
+            ap_w = calculate_ap(w, Ain_v, S, P)
+            prod *= (1 - ap_w*float(P.loc[e]))
+        return 1 - prod
 
+def update(Ain, S, P):
+    """
+    Returns influence spread in IC model from S using activation probabilities in in-arborescences.
+    :param Ain: dictionary of node -> networkx in-arborescence
+    :param S: list of seed set
+    :param P: dataframe of edge probabilities
+    :return:
+    """
+    return sum([calculate_ap(u, Ain[u], S, P) for u in Ain])
 
 
 if __name__ == "__main__":
@@ -222,17 +251,20 @@ if __name__ == "__main__":
     P = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
     F = []
 
-    S = [9]
-
     # greedy algorithm
     # start = time.time()
     # features = greedy(G, B, Q, P, Ef, S, Phi, 5, 10)
     # print time.time() - start
 
-    S = [0, 2]
+    theta = 1./2000
+    S = [0, 5, 10]
     start = time.time()
-    Ain = explore(G, P, S, 1./40)
+    Ain = explore(G, P, S, theta)
     print time.time() - start
     print len(Ain)
+
+    print update(Ain, S, P)
+    print calculate_MC_spread(G, S, P, 10)
+
 
     console = []
