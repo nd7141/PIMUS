@@ -110,7 +110,7 @@ def calculate_MC_spread(G, S, P, I):
     """
     spread = 0.
     for _ in range(I):
-        print 'I:', _,
+        # print 'I:', _,
         activated = dict(zip(G.nodes(), [False]*len(G)))
         for node in S:
             activated[node] = True
@@ -125,15 +125,32 @@ def calculate_MC_spread(G, S, P, I):
                         activated[neighbor] = True
                         T.append(neighbor)
             i += 1
-        print len(T)
+        # print len(T)
         spread += len(T)
     return spread/I
+
+def greedy(G, B, Q, P, Ef, S, Phi, K, I):
+    F = []
+    while len(F) < K:
+        max_spread = -1
+        print 'len(F):', len(F)
+        for f in Phi:
+            changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
+            spread = calculate_MC_spread(G, S, P, I)
+            if spread > max_spread:
+                max_spread = spread
+                max_feature = f
+            decrease_probabilities(changed, P)
+        F.append(max_feature)
+        increase_probabilities(G, B, Q, F + [max_feature], Ef[max_feature], P)
+    return F
 
 
 if __name__ == "__main__":
 
     G = read_graph('datasets/wv.txt')
     Ef = add_graph_attributes(G, 'datasets/wv_likes.txt')
+    Phi = Ef.keys()
 
     B = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
     Q = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
@@ -142,13 +159,11 @@ if __name__ == "__main__":
     P = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
     F = []
 
-    f = '126' # a feature with the smallest affected edges
-    F.append(f)
-    changed = increase_probabilities(G, B, Q,  F, Ef[f], P)
-
-    f2 = '115'
-    F.append(f2)
-    changed = increase_probabilities(G, B, Q, F, Ef[f2], P)
+    S = [9]
+    start = time.time()
+    features = greedy(G, B, Q, P, Ef, S, Phi, 5, 10)
+    print 'Greedy: {} sec'.format(time.time() - start)
+    print features
 
 
 
