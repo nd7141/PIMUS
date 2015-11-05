@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import time
 import random
+import math
 
 def read_graph(filename, directed=True, sep=' ', header = None):
     """
@@ -130,6 +131,19 @@ def calculate_MC_spread(G, S, P, I):
     return spread/I
 
 def greedy(G, B, Q, P, Ef, S, Phi, K, I):
+    """
+    Return best features to PIMUS problem using greedy algorithm.
+    :param G: networkx graph
+    :param B: dataframe of base probabilities
+    :param Q: dataframe of product probabilities
+    :param P: dataframe of edge probabilities
+    :param Ef: dictionary feature -> edges
+    :param S: list of seed set
+    :param Phi: set of all features
+    :param K: integer of number of required features
+    :param I: integer number of Monte-Carlo simulations
+    :return: F: list of K best features
+    """
     F = []
     while len(F) < K:
         max_spread = -1
@@ -146,6 +160,55 @@ def greedy(G, B, Q, P, Ef, S, Phi, K, I):
     return F
 
 
+def explore(G, P, S, theta):
+    """
+    Creates in-arborescences for nodes reachable from S.
+    :param G: networkx graph
+    :param P: dataframe of edge probabilities
+    :param S: list seed set
+    :param theta: float parameter controlling size of arborescence
+    :return:
+    """
+    Ain = dict()
+    for v in S:
+        MIPs = {v: []} # shortest paths of edges to nodes from v
+        crossing_edges = set([out_edge for out_edge in G.out_edges([v]) if out_edge[1] not in S + [v]])
+        edge_weights = dict()
+        dist = {v: 0} # shortest paths from the root v
+
+        while crossing_edges:
+            # Dijkstra's greedy criteria
+            min_dist = float("Inf")
+            sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
+            for edge in sorted_crossing_edges:
+                if edge not in edge_weights:
+                    edge_weights[edge] = -math.log(float(P.loc[edge]))
+                edge_weight = edge_weights[edge]
+                if dist[edge[0]] + edge_weight < min_dist:
+                    min_dist = dist[edge[0]] + edge_weight
+                    min_edge = edge
+            # check stopping criteria
+            if min_dist < -math.log(theta):
+                dist[min_edge[1]] = min_dist
+                MIPs[min_edge[1]] = MIPs[min_edge[0]] + [min_edge]
+                # update crossing edges
+                crossing_edges.difference_update(G.in_edges(min_edge[1]))
+                crossing_edges.update([out_edge for out_edge in G.out_edges(min_edge[1])
+                                       if (out_edge[1] not in MIPs) and (out_edge[1] not in S)])
+            else:
+                break
+        for u in MIPs:
+            if u not in S:
+                if u in Ain:
+                    Ain[u].add_edges_from(MIPs[u])
+                else:
+                    Ain[u] = nx.DiGraph()
+                    Ain[u].add_edges_from(MIPs[u])
+    return Ain
+
+
+
+
 if __name__ == "__main__":
 
     G = read_graph('datasets/wv.txt')
@@ -160,11 +223,16 @@ if __name__ == "__main__":
     F = []
 
     S = [9]
+
+    # greedy algorithm
+    # start = time.time()
+    # features = greedy(G, B, Q, P, Ef, S, Phi, 5, 10)
+    # print time.time() - start
+
+    S = [0, 2]
     start = time.time()
-    features = greedy(G, B, Q, P, Ef, S, Phi, 5, 10)
-    print 'Greedy: {} sec'.format(time.time() - start)
-    print features
-
-
+    Ain = explore(G, P, S, 1./40)
+    print time.time() - start
+    print len(Ain)
 
     console = []
