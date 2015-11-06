@@ -130,13 +130,12 @@ def calculate_MC_spread(G, S, P, I):
         spread += len(T)
     return spread/I
 
-def greedy(G, B, Q, P, Ef, S, Phi, K, I):
+def greedy(G, B, Q, Ef, S, Phi, K, I):
     """
     Return best features to PIMUS problem using greedy algorithm.
     :param G: networkx graph
     :param B: dataframe of base probabilities
     :param Q: dataframe of product probabilities
-    :param P: dataframe of edge probabilities
     :param Ef: dictionary feature -> edges
     :param S: list of seed set
     :param Phi: set of all features
@@ -144,6 +143,7 @@ def greedy(G, B, Q, P, Ef, S, Phi, K, I):
     :param I: integer number of Monte-Carlo simulations
     :return: F: list of K best features
     """
+    P = B.copy()
     F = []
     while len(F) < K:
         max_spread = -1
@@ -159,41 +159,6 @@ def greedy(G, B, Q, P, Ef, S, Phi, K, I):
         increase_probabilities(G, B, Q, F + [max_feature], Ef[max_feature], P)
     return F
 
-def initialize_pi(G, P, S, theta):
-    Pi_nodes = set()
-    for v in S:
-        Pi_nodes.add(v)
-        crossing_edges = set([out_edge for out_edge in G.out_edges([v]) if out_edge[1] not in S + [v]])
-        edge_weights = dict()
-        dist = {v: 0} # shortest paths from the root v
-
-        while crossing_edges:
-            # Dijkstra's greedy criteria
-            min_dist = float("Inf")
-            sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
-            for edge in sorted_crossing_edges:
-                if edge not in edge_weights:
-                    edge_weights[edge] = -math.log(float(P.loc[edge]))
-                edge_weight = edge_weights[edge]
-                if dist[edge[0]] + edge_weight < min_dist:
-                    min_dist = dist[edge[0]] + edge_weight
-                    min_edge = edge
-            # check stopping criteria
-            if min_dist < -math.log(theta):
-                dist[min_edge[1]] = min_dist
-                Pi_nodes.add(min_edge[1])
-                # update crossing edges
-                crossing_edges.difference_update(G.in_edges(min_edge[1]))
-                crossing_edges.update([out_edge for out_edge in G.out_edges(min_edge[1])
-                                       if (out_edge[1] not in Pi_nodes) and (out_edge[1] not in S)])
-            else:
-                break
-    Pi = set()
-    for node in Pi_nodes:
-        Pi.update(G.in_edges(node))
-        Pi.update(G.out_edges(node))
-    return Pi
-
 def explore(G, P, S, theta):
     """
     Creates in-arborescences for nodes reachable from S.
@@ -203,6 +168,7 @@ def explore(G, P, S, theta):
     :param theta: float parameter controlling size of arborescence
     :return:
     """
+
     Ain = dict()
     for v in S:
         MIPs = {v: []} # shortest paths of edges to nodes from v
@@ -271,8 +237,51 @@ def update(Ain, S, P):
     """
     return sum([calculate_ap(u, Ain[u], S, P) for u in Ain])
 
-def explore_update(G, B, Q, S, theta):
-    P = B.copy()
+def get_pi(G, Ain, S):
+    Pi_nodes = set(Ain.keys() + S)
+    Pi = set()
+    for u in Pi_nodes:
+        Pi.update(G.in_edges(u))
+        Pi.update(G.out_edges(u))
+    return Pi
+
+def explore_update(G, B, Q, S, K, Ef, theta):
+    P = B.copy() # initialize edge probabilities
+
+    Ain = explore(G, P, S, theta)
+    Pi = get_pi(G, Ain, S)
+
+    F = []
+    Phi = set(Ef.keys())
+
+    count = 0
+    while len(F) < K:
+        print '***************len(F): {}'.format(len(F))
+        max_feature = None
+        max_spread = -1
+        for f in Phi.difference(F):
+            e_intersection = Pi.intersection(Ef[f])
+            print len(e_intersection)
+            if e_intersection:
+                changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
+                Ain = explore(G, P, S, theta)
+                spread = update(Ain, S, P)
+                if spread > max_spread:
+                    max_spread = spread
+                    max_feature = f
+                decrease_probabilities(changed, P)
+            else:
+                count += 1
+        if max_feature:
+            F.append(max_feature)
+            increase_probabilities(G, B, Q, F, Ef[max_feature], P)
+            Ain = explore(G, P, S, theta)
+            Pi = get_pi(G, Ain, S)
+        else:
+            raise ValueError, 'Not found max_feature. F: {}'.format(F)
+    print 'Total number of omissions', count
+    return F
+
 
 
 if __name__ == "__main__":
@@ -284,18 +293,24 @@ if __name__ == "__main__":
     B = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
     Q = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
 
-    # intialize edge probabilities
-    P = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
-    F = []
-
-    # greedy algorithm
-    # start = time.time()
-    # features = greedy(G, B, Q, P, Ef, S, Phi, 5, 10)
-    # print time.time() - start
+    print 'Phi: {}'.format(len(Ef))
 
     S = [0]
-    Pi = initialize_pi(G, P, S, 1./320)
-    Ain = explore(G, P, S, 1./320)
+    # greedy algorithm
+    start = time.time()
+    F = greedy(G, B, Q, Ef, S, Phi, 3, 10)
+    print time.time() - start
+
+    # start = time.time()
+    # F2 = explore_update(G, B, Q, S, 3, Ef, 1./120)
+    # print F2, time.time() - start
+
+    P = B.copy()
+    E = []
+    for f in F:
+        E.extend(Ef[f])
+    changed = increase_probabilities(G, B, Q, F, E, P)
+    calculate_MC_spread(G, S, P, 10)
 
     # theta = 1./2000
     # S = [0, 5, 10]
@@ -307,5 +322,6 @@ if __name__ == "__main__":
     # print update(Ain, S, P)
     # print calculate_MC_spread(G, S, P, 10)
 
+    122, 126, 127
 
     console = []
