@@ -49,6 +49,7 @@ def add_graph_attributes(G, filename):
     :return: Ef: dictionary f -> edges that it affects
     """
     Ef = dict() # feature -> edges
+    Nf = dict() # node -> features
     with open(filename) as f:
         for line in f:
             d = line.split()
@@ -57,7 +58,8 @@ def add_graph_attributes(G, filename):
             for f in features:
                 Ef.setdefault(f, []).extend(G.in_edges(u)) # add feature-dependent edges
             G.node[u]['Fu'] = features
-    return Ef
+            Nf[u] = features
+    return Ef, Nf
 
 def read_probabilities(filename, sep=' '):
     """
@@ -282,12 +284,19 @@ def explore_update(G, B, Q, S, K, Ef, theta):
     print 'Total number of omissions', count
     return F
 
+def calculate_spread(G, S, B, Q, F, Ef, I):
+    P = B.copy()
+    E = []
+    for f in F:
+        E.extend(Ef[f])
+    increase_probabilities(G, B, Q, F, E, P)
 
+    return calculate_MC_spread(G, S, P, I)
 
 if __name__ == "__main__":
 
     G = read_graph('datasets/wv.txt')
-    Ef = add_graph_attributes(G, 'datasets/wv_likes.txt')
+    Ef, Nf = add_graph_attributes(G, 'datasets/wv_likes.txt')
     Phi = Ef.keys()
 
     B = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
@@ -296,21 +305,31 @@ if __name__ == "__main__":
     print 'Phi: {}'.format(len(Ef))
 
     S = [0]
-    # greedy algorithm
-    start = time.time()
-    F = greedy(G, B, Q, Ef, S, Phi, 3, 10)
-    print time.time() - start
+    # # greedy algorithm
+    # start = time.time()
+    # F = greedy(G, B, Q, Ef, S, Phi, 3, 10)
+    # print time.time() - start
 
+    # EU algorithm
     # start = time.time()
     # F2 = explore_update(G, B, Q, S, 3, Ef, 1./120)
     # print F2, time.time() - start
 
-    P = B.copy()
-    E = []
-    for f in F:
-        E.extend(Ef[f])
-    changed = increase_probabilities(G, B, Q, F, E, P)
-    calculate_MC_spread(G, S, P, 10)
+    # top edges
+    # F = map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:3])
+    # print F
+
+    # top nodes
+    # from collections import Counter
+    # from itertools import chain
+    # F = map(lambda (k, v): k, Counter(chain.from_iterable(Nf.values())).most_common(3))
+    # print F
+
+    # print calculate_spread(G, S, B, Q, F, Ef, 100)
+    # print calculate_spread(G, S, B, Q, F2, Ef, 100)
+
+
+
 
     # theta = 1./2000
     # S = [0, 5, 10]
