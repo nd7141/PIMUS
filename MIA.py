@@ -293,6 +293,15 @@ def calculate_spread(G, S, B, Q, F, Ef, I):
 
     return calculate_MC_spread(G, S, P, I)
 
+def read_groups(filename):
+    groups = dict()
+    with open(filename) as f:
+        for line in f:
+            d = line.split()
+            members = map(int, d[1:])
+            groups[d[0]] = members
+    return groups
+
 if __name__ == "__main__":
 
     G = read_graph('datasets/wv.txt')
@@ -304,7 +313,9 @@ if __name__ == "__main__":
 
     print 'Phi: {}'.format(len(Ef))
 
-    S = [0]
+    groups = read_groups('datasets/gnutella_com.txt')
+    S = sorted(groups.values(), key = lambda v: len(v))[0]
+    print S
     # # greedy algorithm
     # start = time.time()
     # F = greedy(G, B, Q, Ef, S, Phi, 3, 10)
@@ -340,7 +351,5 @@ if __name__ == "__main__":
     #
     # print update(Ain, S, P)
     # print calculate_MC_spread(G, S, P, 10)
-
-    122, 126, 127
 
     console = []
