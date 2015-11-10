@@ -62,7 +62,7 @@ def visualiseResults(x, y_lst, legends, xlabel="", ylabel="", title="", filename
         plots.append(p)
 
     # plt.xlim([9, 200])
-    # plt.ylim([770, 820])
+    # plt.ylim([88, 152])
 
     plt.legend(plots, legends, loc=2, prop={'size': 24})
     plt.grid()
@@ -76,18 +76,75 @@ def visualiseResults(x, y_lst, legends, xlabel="", ylabel="", title="", filename
     if filename:
         fig.savefig(filename, dpi=fig.dpi)
 
+def bar_plot(y, xticks, xlabel="", ylabel="", filename="", title=""):
+    matplotlib.rcParams.update({'font.size': 14})
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    width = 2
+
+    x = np.arange(0, 4*len(y), 4)
+    colors = ['r', 'g', 'm', 'k', 'y', 'c', u'#fe2fb3', u'#abfeaa', u'#cccabc', u'#1111ee', 'b']
+    colors = ['k', 'k']
+    colors = colors[::1]
+
+    if xlabel:
+        plt.xlabel(xlabel)
+    if ylabel:
+        plt.ylabel(ylabel, fontsize = 24)
+
+    if title:
+        plt.title('%s' %(title), fontsize = 18)
+
+    plt.grid(axis="y", linestyle='-', linewidth=2)
+
+
+
+    rects1 = ax.bar(x, y, width = 3, bottom=0, color = "k", log=True)
+    plt.xticks(x + 1.5, xticks, fontsize=17)
+
+    # add text label at the top of each bar
+    # solution found at http://matplotlib.org/examples/api/barchart_demo.html
+    def autolabel(rects):
+        # attach some text labels
+        for rect in rects:
+            height = rect.get_height()
+            ax.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%.1f'%height,
+                    ha='center', va='bottom')
+
+    autolabel(rects1)
+    for i, rect in enumerate(rects1):
+        rect.set_color(colors[i])
+    if filename:
+        fig.set_size_inches(15.5,11.5)
+        fig.savefig(filename, dpi=fig.dpi)
+    plt.show()
+
 if __name__ == "__main__":
     x = range(5, 55, 5)
-    with open("datasets/gnutella_results.txt") as f:
+    with open("datasets/gnutella_results2_mv_greedy.txt") as f:
+        d = map(float, f.readlines()[0].split())
+        gr = d[1::2]
+    # print gr
+    with open("datasets/gnutella_results2_mv.txt") as f:
         eu = []
         tope = []
         topn = []
         for line in f:
             d = map(float, line.split())
-            eu.append(d[0])
-            tope.append(d[1])
-            topn.append(d[2])
+            eu.append(d[1])
+            tope.append(d[2])
+            topn.append(d[3])
 
-    visualiseResults(x, [eu, tope, topn], ['EU', 'Top-Edges', 'Top-Nodes'], filename="datasets/gnutella_results.png")
+    visualiseResults(x, [eu, tope, topn, gr], ['Explore-Update', 'Top-Edges', 'Top-Nodes', 'Greedy'], xlabel='Number of features in F, K',
+                     ylabel='Influence Spread', filename="datasets/gnutella_results2_mv2.png")
+
+    # with open("datasets/gnutella_time2_mv.txt") as f:
+    #     y = map(float, f.readlines()[0].split())
+    #
+    # with open("datasets/gnutella_time2_mv_greedy.txt") as f:
+    #     y.append(float(f.readlines()[0]))
+    #
+    # bar_plot(y, ['Explore-Update', 'Greedy'], xlabel='Algorithms', ylabel='Execution time (sec)', filename="datasets/gnutella_time2_mv.png")
 
     console = []
