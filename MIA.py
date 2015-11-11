@@ -3,10 +3,12 @@
 from __future__ import division
 import networkx as nx
 import pandas as pd
-import numpy as np
 import time
 import random
 import math
+from collections import Counter
+from itertools import chain, combinations
+import multiprocessing as mp
 
 def read_graph(filename, directed=True, sep=' ', header = None):
     """
@@ -113,7 +115,7 @@ def calculate_MC_spread(G, S, P, I):
     """
     spread = 0.
     for _ in range(I):
-        print 'I:', _,
+        # print 'I:', _,
         activated = dict(zip(G.nodes(), [False]*len(G)))
         for node in S:
             activated[node] = True
@@ -128,7 +130,7 @@ def calculate_MC_spread(G, S, P, I):
                         activated[neighbor] = True
                         T.append(neighbor)
             i += 1
-        print len(T)
+        # print len(T)
         spread += len(T)
     return spread/I
 
@@ -157,6 +159,7 @@ def greedy(G, B, Q, Ef, S, Phi, K, I):
                 max_spread = spread
                 max_feature = f
             decrease_probabilities(changed, P)
+        print 'Selected', max_feature
         F.append(max_feature)
         increase_probabilities(G, B, Q, F + [max_feature], Ef[max_feature], P)
     return F
@@ -240,6 +243,13 @@ def update(Ain, S, P):
     return sum([calculate_ap(u, Ain[u], S, P) for u in Ain])
 
 def get_pi(G, Ain, S):
+    """
+    Get participating edges.
+    :param G: networkx graph
+    :param Ain: in-arborescences
+    :param S: Seed set
+    :return:
+    """
     Pi_nodes = set(Ain.keys() + S)
     Pi = set()
     for u in Pi_nodes:
@@ -248,10 +258,22 @@ def get_pi(G, Ain, S):
     return Pi
 
 def explore_update(G, B, Q, S, K, Ef, theta):
+    """
+    Explore-Update algorithm.
+    :param G: networkx graph
+    :param B: dataframe base probabilities
+    :param Q: dataframe product probabilities
+    :param S: list of seed set
+    :param K: integer of number of required features
+    :param Ef: dictionary of feature to edges
+    :param theta: float threshold parameter
+    :return F: list of selected features
+    """
     P = B.copy() # initialize edge probabilities
 
     Ain = explore(G, P, S, theta)
     Pi = get_pi(G, Ain, S)
+    print 'Ain:', len(Ain)
 
     F = []
     Phi = set(Ef.keys())
@@ -263,7 +285,7 @@ def explore_update(G, B, Q, S, K, Ef, theta):
         max_spread = -1
         for f in Phi.difference(F):
             e_intersection = Pi.intersection(Ef[f])
-            print len(e_intersection)
+            # print 'intersection', len(e_intersection)
             if e_intersection:
                 changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
                 Ain = explore(G, P, S, theta)
@@ -273,18 +295,31 @@ def explore_update(G, B, Q, S, K, Ef, theta):
                     max_feature = f
                 decrease_probabilities(changed, P)
             else:
+                print 'Missing feature', f
                 count += 1
         if max_feature:
             F.append(max_feature)
             increase_probabilities(G, B, Q, F, Ef[max_feature], P)
             Ain = explore(G, P, S, theta)
             Pi = get_pi(G, Ain, S)
+            print 'Ain:', len(Ain)
         else:
             raise ValueError, 'Not found max_feature. F: {}'.format(F)
     print 'Total number of omissions', count
     return F
 
-def calculate_spread(G, S, B, Q, F, Ef, I):
+def calculate_spread(G, B, Q, S, F, Ef, I):
+    """
+    Calculate spread for given feature set F.
+    :param G: networkx graph
+    :param B: dataframe base probabilities
+    :param Q: dataframe product probabilities
+    :param S: list of seed set
+    :param F: list of selected features
+    :param Ef: dictionary of feature to edges
+    :param I: integer number of MC calculations
+    :return: float average number of influenced nodes
+    """
     P = B.copy()
     E = []
     for f in F:
@@ -294,6 +329,11 @@ def calculate_spread(G, S, B, Q, F, Ef, I):
     return calculate_MC_spread(G, S, P, I)
 
 def read_groups(filename):
+    """
+    Reads groups' memberships.
+    :param filename: string each line is group and its members
+    :return: dictionary group to members
+    """
     groups = dict()
     with open(filename) as f:
         for line in f:
@@ -302,39 +342,145 @@ def read_groups(filename):
             groups[d[0]] = members
     return groups
 
+def number_of_combinations(n, k):
+    d = {1: 1}
+    for i in range(2, n+1):
+        d[i] = d[i-1]*i
+    return float(d[n])/(d[k]*d[n-k])
+
+def brute_force(G, B, Q, S, K, Ef, I):
+    Phi = set(Ef.keys())
+    combs = combinations(Phi, K)
+    max_spread = -1
+    max_F = []
+    print 'Total', number_of_combinations(len(Phi), K)
+    for i, f_set in enumerate(combs):
+        print i, f_set,
+        start = time.time()
+        spread = calculate_spread(G, B, Q, S, f_set, Ef, I)
+        print spread, time.time() - start
+        if spread > max_spread:
+            max_F = f_set
+            max_spread = spread
+    return max_F, max_spread
+
+class CalcSpread(object):
+    def __init__(self, G, B, Q, S, Ef, I):
+        self.G = G
+        self.B = B
+        self.Q = Q
+        self.S = S
+        self.Ef = Ef
+        self.I = I
+    def c_spread(self, F):
+        return calculate_spread(G, B, Q, S, F, Ef, I)
+
+# def calc_spread(F):
+#     start = time.time()
+#     spread = C.c_spread(F)
+#     finish = time.time() - start
+#     print F, spread, finish
+#     return F, spread
+
+
 if __name__ == "__main__":
 
-    G = read_graph('datasets/wv.txt')
-    Ef, Nf = add_graph_attributes(G, 'datasets/wv_likes.txt')
+    G = read_graph('datasets/gnutella.txt')
+    Ef, Nf = add_graph_attributes(G, 'datasets/gnutella_mem4.txt')
     Phi = Ef.keys()
 
-    B = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
-    Q = read_probabilities('datasets/Wiki-Vote_graph_ic.txt')
+    B = read_probabilities('datasets/gnutella_mv.txt')
+    Q = read_probabilities('datasets/gnutella_mv.txt')
 
     print 'Phi: {}'.format(len(Ef))
 
-    groups = read_groups('datasets/gnutella_com.txt')
-    S = sorted(groups.values(), key = lambda v: len(v))[0]
-    print S
-    # # greedy algorithm
+    groups = read_groups('datasets/gnutella_com4.txt')
+    S = groups['16']
+    print len(S), S
+
+    # for u in S:
+    #     print u, Nf[u]
+
+    I = 100
+
+    for u in S:
+        edges = G.in_edges(u)
+        G.remove_edges_from(edges)
+
+    K = 4
+    # C = CalcSpread(G, B, Q, S, Ef, I)
+    # combs = combinations(Phi, K)
+    # pool = mp.Pool(4)
     # start = time.time()
-    # F = greedy(G, B, Q, Ef, S, Phi, 3, 10)
-    # print time.time() - start
+    # map_lst = pool.map(calc_spread, combs)
+    # finish = time.time() - start
+    # print 'Total time to brute-force', finish
+    # sorted_maps = sorted(map_lst, key = lambda (_, s): s, reverse=True)
+    # print sorted_maps[:10]
+    # with open('gnutella_mv_opt.txt', 'w') as f1:
+    #     for F, sp in sorted_maps:
+    #         f1.write("{} ".format(sp))
+    #         for f in F:
+    #             f1.write("{} ".format(f))
+    #         f1.write("\n")
 
-    # EU algorithm
-    # start = time.time()
-    # F2 = explore_update(G, B, Q, S, 3, Ef, 1./120)
-    # print F2, time.time() - start
+    # with open('datasets/gnutella_eu_selected2_wc.txt') as f:
+    #     selected_eu = f.readlines()[0].split()
+    #
+    # with open('datasets/gnutella_greedy_selected2_wc.txt') as f:
+    #     selected_greedy = f.readlines()[0].split()
+    #
+    with open("gnutella_mv_results.txt", 'w') as f1:
+        for K in [4]:
+            print 'K', K
+            # greedy algorithm
+            start = time.time()
+            F = greedy(G, B, Q, Ef, S, Phi, K, 100)
+            # F = selected_greedy[:K]
+            finish = time.time() - start
+            # f1.write("{}".format(finish))
+            print 'Greedy:', F, finish
+            greedy_spread = calculate_spread(G, B, Q, S, F, Ef, I)
+            print 'Greedy spread:', greedy_spread
+            f1.write("{} ".format(greedy_spread))
+    #
+    #         # with open('datasets/gnutella_greedy_selected2_wc.txt', 'w') as f:
+    #         #     f.write(" ".join(F))
+    #
+            # EU algorithm
+            # start = time.time()
+            # F2 = explore_update(G, B, Q, S, K, Ef, 1./40)
+            # # F2 = selected_eu[:K]
+            # finish = time.time() - start
+            # # f1.write("{} ".format(finish))
+            # print 'EU', F2, time.time() - start
+            # start = time.time()
+            # eu_spread = calculate_spread(G, B, Q, S, F2, Ef, I)
+            # print 'EU spread:', eu_spread, time.time() - start
+            # f1.write("{} ".format(eu_spread))
 
-    # top edges
-    # F = map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:3])
-    # print F
-
-    # top nodes
-    # from collections import Counter
-    # from itertools import chain
-    # F = map(lambda (k, v): k, Counter(chain.from_iterable(Nf.values())).most_common(3))
-    # print F
+            # with open('datasets/gnutella_eu_selected2_wc.txt', 'w') as f:
+            #     f.write(" ".join(F2))
+    #
+            # top edges
+            start = time.time()
+            F = map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:K])
+            finish = time.time() - start
+            # f2.write("{} ".format(finish))
+            print 'Top edges:', F, time.time() - start
+            tope_spread = calculate_spread(G, B, Q, S, F, Ef, I)
+            print 'Top edges spread:', tope_spread
+            f1.write("{} ".format(tope_spread))
+            #
+            # # top nodes
+            start = time.time()
+            F = map(lambda (k, v): k, Counter(chain.from_iterable(Nf.values())).most_common(K))
+            finish = time.time() - start
+            # f2.write("{}\n".format(finish))
+            print 'Top nodes:', F, time.time() - start
+            topn_spread = calculate_spread(G, B, Q, S, F, Ef, I)
+            print 'Top nodes spread:', topn_spread
+            f1.write("{}\n".format(topn_spread))
 
     # print calculate_spread(G, S, B, Q, F, Ef, 100)
     # print calculate_spread(G, S, B, Q, F2, Ef, 100)
