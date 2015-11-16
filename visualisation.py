@@ -57,19 +57,21 @@ def visualiseResults(x, y_lst, legends, xlabel="", ylabel="", title="", filename
     plots = []
     # print colors
     for i in range(len(y_lst)):
-        plt.plot(x, y_lst[i], color=colors[i], linewidth=3)
-        p, = plt.plot(x, y_lst[i], color = colors[i], marker = marks[i], markersize=10)
+        plt.plot(x, y_lst[i], color=colors[i], linewidth=5)
+        p, = plt.plot(x, y_lst[i], color = colors[i], marker = marks[i], markersize=20)
         plots.append(p)
 
     # plt.xlim([9, 200])
     # plt.ylim([88, 152])
 
-    plt.legend(plots, legends, loc=2, prop={'size': 24})
+    plt.xticks(range(21, 105, 10))
+
+    plt.legend(plots, legends, loc=2, prop={'size': 40})
     plt.grid()
-    plt.ylabel(ylabel)
-    plt.xlabel(xlabel)
+    plt.ylabel(ylabel, fontsize=40)
+    plt.xlabel(xlabel, fontsize=40)
     if title:
-        plt.title('%s' %(title), fontsize = 24)
+        plt.title('%s' %(title), fontsize = 48)
     plt.show()
     # if os.path.exists(filename):
     #     os.remove(filename)
@@ -120,31 +122,80 @@ def bar_plot(y, xticks, xlabel="", ylabel="", filename="", title=""):
         fig.savefig(filename, dpi=fig.dpi)
     plt.show()
 
+def double_axis_plot(x, y_lst1, y_lst2, title="", fontsize=20):
+    matplotlib.rcParams.update({'font.size': fontsize})
+    fig, ax1 = plt.subplots(figsize=(18, 10))
+    colors = ['b', 'r', 'g']
+    marks = ["o", "s", "^"]
+
+    plots = []
+    # print colors
+    for i in range(len(y_lst1)):
+        ax1.plot(x, y_lst1[i], color=colors[i], linewidth=4)
+        p, = ax1.plot(x, y_lst1[i], color = colors[i], marker = marks[i], markersize=10)
+        plots.append(p)
+    ax1.set_xlabel('Seed set size, |S|')
+    # Make the y-axis label and tick labels match the line color.
+    ax1.set_ylabel('Influence spread', fontsize=fontsize)
+    # for tl in ax1.get_yticklabels():
+    #     tl.set_color('b')
+
+    ax1.grid()
+    plt.xticks(range(21,110,10))
+    if title:
+        plt.title(title, fontsize=fontsize)
+
+
+    ax2 = ax1.twinx()
+    for i in range(len(y_lst2)):
+        ax2.plot(x, y_lst2[i], 'g--', linewidth=2)
+        p, = ax2.plot(x, y_lst2[i], color = colors[2], marker = marks[2], markersize=10)
+        plots.append(p)
+    ax2.set_ylabel('Running time (sec)', fontsize=fontsize)
+    for tl in ax2.get_yticklabels():
+        tl.set_color(colors[2])
+
+    ax2.set_yscale("log")
+
+    plt.legend(plots, ['EU', 'Top-Edges'], loc=2, prop={'size': fontsize})
+
+    plt.show()
+
 if __name__ == "__main__":
-    x = range(5, 55, 5)
-    with open("datasets/gnutella_results2_mv_greedy.txt") as f:
-        d = map(float, f.readlines()[0].split())
-        gr = d[1::2]
+    model = "mv"
+    # x = range(5, 55, 5)
+    # with open("datasets/gnutella_results2_mv_greedy.txt") as f:
+    #     d = map(float, f.readlines()[0].split())
+    #     gr = d[1::2]
     # print gr
-    with open("datasets/gnutella_results2_mv.txt") as f:
+    with open("datasets/experiment3/gnutella_results_{}.txt".format(model)) as f:
+        x = []
         eu = []
         tope = []
-        topn = []
         for line in f:
             d = map(float, line.split())
+            x.append(d[0])
             eu.append(d[1])
             tope.append(d[2])
-            topn.append(d[3])
 
-    visualiseResults(x, [eu, tope, topn, gr], ['Explore-Update', 'Top-Edges', 'Top-Nodes', 'Greedy'], xlabel='Number of features in F, K',
-                     ylabel='Influence Spread', filename="datasets/gnutella_results2_mv2.png")
+    with open("datasets/experiment3/gnutella_time_{}.txt".format(model)) as f:
+        eu_timing = []
+        for line in f:
+            eu_timing.append(float(line.split()[1]))
 
-    # with open("datasets/gnutella_time2_mv.txt") as f:
+
+    # visualiseResults(x, [eu, tope], ['Explore-Update', 'Top-Edges'], xlabel='Seed set size, |S|',
+    #                  ylabel='Influence Spread', filename="datasets/experiment3/gnutella_results_{}.png".format(model),
+    #                  title="Inf. Spread for K = 50.")
+
+    double_axis_plot(x, [eu, tope], [eu_timing], title="Inf. Spread for K = 50.")
+
+    # with open("datasets/gnutella_time2_wc.txt") as f:
     #     y = map(float, f.readlines()[0].split())
     #
-    # with open("datasets/gnutella_time2_mv_greedy.txt") as f:
+    # with open("datasets/gnutella_time2_wc_greedy.txt") as f:
     #     y.append(float(f.readlines()[0]))
     #
-    # bar_plot(y, ['Explore-Update', 'Greedy'], xlabel='Algorithms', ylabel='Execution time (sec)', filename="datasets/gnutella_time2_mv.png")
+    # bar_plot(y, ['Explore-Update', 'Greedy'], xlabel='Algorithms', ylabel='Execution time (sec)', filename="datasets/gnutella_time2_wc.png")
 
     console = []
