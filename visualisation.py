@@ -122,7 +122,7 @@ def bar_plot(y, xticks, xlabel="", ylabel="", filename="", title=""):
         fig.savefig(filename, dpi=fig.dpi)
     plt.show()
 
-def double_axis_plot(x, y_lst1, y_lst2, title="", fontsize=20):
+def double_axis_plot(x, y_lst1, y_lst2, title="", fontsize=20, filename=""):
     matplotlib.rcParams.update({'font.size': fontsize})
     fig, ax1 = plt.subplots(figsize=(18, 10))
     colors = ['b', 'r', 'g']
@@ -134,32 +134,64 @@ def double_axis_plot(x, y_lst1, y_lst2, title="", fontsize=20):
         ax1.plot(x, y_lst1[i], color=colors[i], linewidth=4)
         p, = ax1.plot(x, y_lst1[i], color = colors[i], marker = marks[i], markersize=10)
         plots.append(p)
-    ax1.set_xlabel('Seed set size, |S|')
+    ax1.set_xlabel('Seed set size, |S|', labelpad=-20)
     # Make the y-axis label and tick labels match the line color.
     ax1.set_ylabel('Influence spread', fontsize=fontsize)
     # for tl in ax1.get_yticklabels():
     #     tl.set_color('b')
 
     ax1.grid()
-    plt.xticks(range(21,110,10))
+    plt.xticks([21, 31, 41, 81, 91, 101])
     if title:
         plt.title(title, fontsize=fontsize)
 
 
     ax2 = ax1.twinx()
     for i in range(len(y_lst2)):
-        ax2.plot(x, y_lst2[i], 'g--', linewidth=2)
+        ax2.plot(x, y_lst2[i], 'g', linewidth=4)
         p, = ax2.plot(x, y_lst2[i], color = colors[2], marker = marks[2], markersize=10)
         plots.append(p)
     ax2.set_ylabel('Running time (sec)', fontsize=fontsize)
-    for tl in ax2.get_yticklabels():
-        tl.set_color(colors[2])
+    # for tl in ax2.get_yticklabels():
+    #     tl.set_color(colors[2])
 
     ax2.set_yscale("log")
 
-    plt.legend(plots, ['EU', 'Top-Edges'], loc=2, prop={'size': fontsize})
+
+    plt.legend(plots, ['Explore-Update', 'Top-Edges'], loc=2, prop={'size': fontsize})
 
     plt.show()
+
+    if filename:
+        fig.savefig(filename, dpi=fig.dpi)
+
+def two_bar_plots(y1_lst, y2_lst, num=2, xticks=[], legends=[], xlabel="", ylabel="", fontsize=20, filename=""):
+    matplotlib.rcParams.update({'font.size': fontsize})
+
+    ind = np.arange(num)
+    width = 0.85
+
+    fig = plt.figure(figsize=(18, 10))
+    ax = fig.add_subplot(111)
+    ax.bar(ind+width+0.45, y2_lst, 0.2, color='#deb0b0', log=True)
+    ax.bar(ind+width+0.35, y1_lst, 0.2, color='#b0c4de', log=True)
+
+
+    ax.set_xticks(ind+width+(width/2))
+    if xticks:
+        ax.set_xticklabels(xticks)
+
+    if legends:
+        ax.legend(legends, loc=2)
+    if ylabel:
+        plt.ylabel(ylabel, fontsize=fontsize)
+
+    plt.grid()
+
+    plt.tight_layout()
+    plt.show()
+    if filename:
+        fig.savefig(filename, dpi=fig.dpi)
 
 if __name__ == "__main__":
     model = "mv"
@@ -188,7 +220,25 @@ if __name__ == "__main__":
     #                  ylabel='Influence Spread', filename="datasets/experiment3/gnutella_results_{}.png".format(model),
     #                  title="Inf. Spread for K = 50.")
 
-    double_axis_plot(x, [eu, tope], [eu_timing], title="Inf. Spread for K = 50.")
+    # double_axis_plot(x, [eu, tope], [eu_timing], title="Inf. Spread for K = 50.",
+    #                  filename="datasets/experiment3/gnutella_results_time_{}.jpg".format(model),
+    #                  fontsize=40)
+
+    eu_time = []
+    greedy_time = []
+    with open("datasets/experiment1/gnutella_time2_mv.txt") as f:
+        d = map(float, f.readlines()[0].split())
+        eu_time.append(d[0])
+        greedy_time.append(d[1])
+    with open("datasets/experiment1/gnutella_time2_wc.txt") as f:
+        d = map(float, f.readlines()[0].split())
+        eu_time.append(d[0])
+        greedy_time.append(d[1])
+
+
+    two_bar_plots(eu_time, greedy_time, num=2, xticks=['Multivalency', 'Weighted Cascade'],
+                  legends=['Greedy', 'Explore-Update'], ylabel='Running time (sec)', fontsize=35,
+                  filename="datasets/experiment1/gnutella_time_both.jpg")
 
     # with open("datasets/gnutella_time2_wc.txt") as f:
     #     y = map(float, f.readlines()[0].split())
