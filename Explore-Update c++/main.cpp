@@ -4,11 +4,60 @@
 
 using namespace std;
 
-typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::directedS> DiGraph;
-typedef typename boost::graph_traits<DiGraph>::edge_descriptor Edge;
-typedef pair<DiGraph::edge_descriptor, bool> Edge_insertion;
+typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::bidirectionalS> DiGraph;
+typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
+typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
+typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
+typedef boost::graph_traits<DiGraph>::in_edge_iterator in_edge_iter;
 
+void print_vertices(DiGraph G) {
+    // Iterate through the vertices and print them out
+    pair<vertex_iter, vertex_iter> vp;
+    for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first)
+        cout << *vp.first << " " << *vp.second << endl;
+    cout << endl;
+}
 
+void print_edges(DiGraph G) {
+    edge_iter ei, edge_end;
+    for (boost::tie(ei, edge_end) = edges(G); ei != edge_end; ++ei) {
+        cout << source(*ei, G) << " " << target(*ei, G) << endl;
+    }
+}
+
+void print_degree(DiGraph G) {
+    vertex_iter vi, v_end;
+    int out_d, in_d, count=0;
+    for (boost::tie(vi, v_end) = boost::vertices(G); vi != v_end; ++vi) {
+        in_d = boost::in_degree(*vi, G);
+        out_d = boost::out_degree(*vi, G);
+        cout << *vi << " " << out_d << " " << in_d << endl;
+    }
+}
+
+void print_node_edges(DiGraph G) {
+    out_edge_iter ei, e_end;
+    in_edge_iter qi, q_end;
+    vertex_iter vi, v_end;
+    for (boost::tie(vi, v_end) = boost::vertices(G); vi != v_end; ++vi) {
+        cout << *vi << "--->";
+        for (boost::tie(ei, e_end) = out_edges(*vi, G); ei!=e_end; ++ei) {
+            cout << target(*ei, G) << " ";
+        }
+        cout << endl;
+        cout << *vi << "<---";
+        for (boost::tie(qi, q_end) = in_edges(*vi, G); qi!=q_end; ++qi) {
+            cout << source(*qi, G) << " ";
+        }
+        cout << endl;
+        cout << endl;
+    }
+}
+
+void print_size(DiGraph G) {
+    cout << num_vertices(G) << endl;
+    cout << num_edges(G) << endl;
+}
 
 DiGraph read_graph(string graph_filename) {
     cout << graph_filename << endl;
@@ -20,8 +69,8 @@ DiGraph read_graph(string graph_filename) {
     map<int, int> mapped;
     int u, v;
     int node_count=0;
-    Edge_insertion edge_insertion;
-    DiGraph G(1);
+    pair<DiGraph::edge_descriptor, bool> edge_insertion;
+    DiGraph G;
 
     while (infile >> u >> v) {
         if (mapped.find(u) == mapped.end()) {
@@ -37,15 +86,7 @@ DiGraph read_graph(string graph_filename) {
             std::cout << "Unable to insert edge\n";
         }
     }
-
-    // Iterate through the vertices and print them out
-    typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
-    std::pair<vertex_iter, vertex_iter> vp;
-    for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first)
-        cout << vp << endl;
-//        std::cout << G[*vp.first] << " " << G[*vp.first] << endl;
-    std::cout << std::endl;
-
+    print_size(G);
     return G;
 }
 
