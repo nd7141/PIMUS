@@ -1,6 +1,7 @@
 #include <iostream>
 #include <boost/graph/adjacency_list.hpp>
 #include <fstream>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 
@@ -11,7 +12,6 @@ typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
 typedef boost::graph_traits<DiGraph>::in_edge_iterator in_edge_iter;
 
 void print_vertices(DiGraph G) {
-    // Iterate through the vertices and print them out
     pair<vertex_iter, vertex_iter> vp;
     for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first)
         cout << *vp.first << " " << *vp.second << endl;
@@ -86,8 +86,36 @@ DiGraph read_graph(string graph_filename) {
             std::cout << "Unable to insert edge\n";
         }
     }
-    print_size(G);
     return G;
+}
+
+void read_features(string feature_filename, DiGraph G, map<int, vector<int> > &Nf, map<int, vector<pair<int, int> > > &Ef) {
+
+    string line;
+    vector<string> line_splitted;
+    int u, f;
+    in_edge_iter ei, e_end;
+
+
+    ifstream infile(feature_filename);
+    if (infile==NULL){
+        cout << "Unable to open the input file\n";
+    }
+    while(getline(infile, line)) {
+        boost::split(line_splitted, line, boost::is_any_of(" "));
+        u = stoi(line_splitted[0]);
+        vector<int> u_features;
+        for (int i=1; i < line_splitted.size(); ++i) {
+            f = stoi(line_splitted[i]);
+            u_features.push_back(f);
+        }
+        for (auto & feat: u_features) {
+            for (boost::tie(ei, e_end) = in_edges(u, G); ei!=e_end; ++ei) {
+                Ef[feat].push_back(make_pair(source(*ei, G), target(*ei, G)));
+            }
+        }
+        Nf[u] = u_features;
+    }
 }
 
 double calculate_spread() {
@@ -113,8 +141,27 @@ int main(int argc, char* argv[]) {
         const int K = atoi(argv[4]);         // number of features
     }
 
+    map<int, vector<int> > Nf;
+    map<int, vector<pair<int, int> > > Ef;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
+    read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
+
+    cout << "content" << endl;
+    for (auto &item: Nf) {
+        cout << item.first << "---->";
+        for (auto &feat: item.second) {
+            cout <<  feat << " ";
+        }
+        cout << endl;
+    }
+    for (auto &item: Ef) {
+        cout << item.first << "<-----";
+        for (auto &edge: item.second) {
+            cout << "(" << edge.first << "," << edge.second << ") " ;
+        }
+        cout << endl;
+    }
 
     return 0;
 }
