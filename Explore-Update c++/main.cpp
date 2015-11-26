@@ -2,7 +2,8 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
-//#include <cstdio>
+//#include <algorithm>
+#include <unordered_set>
 
 using namespace std;
 
@@ -11,6 +12,7 @@ typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
 typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
 typedef boost::graph_traits<DiGraph>::in_edge_iterator in_edge_iter;
+typedef map<pair<int, int>, double> edge_prob;
 
 void print_vertices(DiGraph G) {
     pair<vertex_iter, vertex_iter> vp;
@@ -119,7 +121,7 @@ void read_features(string feature_filename, DiGraph G, map<int, vector<int> > &N
     }
 }
 
-void read_probabilities(string prob_filename, map<pair<int, int>, double> &P) {
+void read_probabilities(string prob_filename, edge_prob &P) {
     ifstream infile(prob_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -131,8 +133,8 @@ void read_probabilities(string prob_filename, map<pair<int, int>, double> &P) {
     }
 }
 
-void read_groups(string group_filename, map<int, vector<int> > &groups) {
 
+void read_groups(string group_filename, map<int, vector<int> > &groups) {
     ifstream infile(group_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -150,6 +152,30 @@ void read_groups(string group_filename, map<int, vector<int> > &groups) {
     }
 }
 
+edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, vector<int> F,
+                                 vector<pair<int, int> > E, edge_prob &P) {
+    edge_prob changed;
+    double q,b,h;
+    int target, intersect;
+    vector<int> F_target;
+    for (auto &edge: E) {
+        changed[edge] = P[edge];
+        q = Q[edge]; b = B[edge];
+//        find intersection
+//        solution found here: http://stackoverflow.com/a/24337598/2069858
+        target = edge.second;
+        F_target = Nf[target];
+        sort(F_target.begin(), F_target.end());
+        sort(F.begin(), F.end());
+        unordered_set<int> s(F_target.begin(), F_target.end());
+        intersect = count_if(F.begin(), F.end(), [&](int k) {return s.find(k) != s.end();});
+        h = intersect/F_target.size();
+        P[edge] = h*q + b;
+    }
+    return changed;
+}
+
+
 int main(int argc, char* argv[]) {
     // read parameters from command-line
     if (argc > 1) {
@@ -160,13 +186,20 @@ int main(int argc, char* argv[]) {
 
     map<int, vector<int> > Nf;
     map<int, vector<pair<int, int> > > Ef;
-    map<pair<int, int>, double> B, Q, P;
+    edge_prob B, Q, P;
     map<int, vector<int> > groups;
+    vector<int> F;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
     read_probabilities("datasets/gnutella_mv.txt", B);
+    read_probabilities("datasets/gnutella_mv.txt", Q);
     read_groups("datasets/gnutella_com.txt", groups);
+
+    F.push_back(9);
+    read_probabilities("datasets/gnutella_mv.txt", P);
+    edge_prob changed;
+    changed = increase_probabilities(G, B, Q, Nf, F, Ef[9], P);
 
     return 0;
 }
