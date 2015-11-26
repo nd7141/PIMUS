@@ -156,7 +156,8 @@ edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, map<int, v
                                  vector<pair<int, int> > E, edge_prob &P) {
     edge_prob changed;
     double q,b,h;
-    int target, intersect;
+    int target;
+    double intersect;
     vector<int> F_target;
     for (auto &edge: E) {
         changed[edge] = P[edge];
@@ -175,6 +176,13 @@ edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, map<int, v
     return changed;
 }
 
+void decrease_probabilities(edge_prob changed, edge_prob &P) {
+    for (auto &item: changed) {
+        pair<int, int> edge = item.first;
+        double p = item.second;
+        P[edge] = p;
+    }
+}
 
 int main(int argc, char* argv[]) {
     // read parameters from command-line
@@ -196,10 +204,20 @@ int main(int argc, char* argv[]) {
     read_probabilities("datasets/gnutella_mv.txt", Q);
     read_groups("datasets/gnutella_com.txt", groups);
 
-    F.push_back(9);
+    F.push_back(1);
     read_probabilities("datasets/gnutella_mv.txt", P);
     edge_prob changed;
-    changed = increase_probabilities(G, B, Q, Nf, F, Ef[9], P);
+    changed = increase_probabilities(G, B, Q, Nf, F, Ef[1], P);
+    decrease_probabilities(changed, P);
+
+    pair<int, int> edge;
+    double p;
+    for (auto &item: changed) {
+        edge = item.first;
+        p = item.second;
+        cout << edge.first << " " << edge.second << " ";
+        cout << B[edge] << " " << P[edge] << endl;
+    }
 
     return 0;
 }
