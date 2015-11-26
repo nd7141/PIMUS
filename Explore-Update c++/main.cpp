@@ -2,6 +2,7 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
+//#include <cstdio>
 
 using namespace std;
 
@@ -118,20 +119,17 @@ void read_features(string feature_filename, DiGraph G, map<int, vector<int> > &N
     }
 }
 
-double calculate_spread() {
-    return 0;
-}
-
-vector<int> greedy (DiGraph G, int K) {
-    vector<int> F;
-
-    while (F.size() < K) {
-        K--; // change to greedy algorithm
+void read_probabilities(map<pair<int, int>, double> &P, string prob_filename) {
+    ifstream infile(prob_filename);
+    if (infile==NULL){
+        cout << "Unable to open the input file\n";
     }
-
-    return F;
+    int u, v;
+    double p;
+    while (infile >> u >> v >> p) {
+        P[make_pair(u, v)] = p;
+    }
 }
-
 
 int main(int argc, char* argv[]) {
     // read parameters from command-line
@@ -143,24 +141,18 @@ int main(int argc, char* argv[]) {
 
     map<int, vector<int> > Nf;
     map<int, vector<pair<int, int> > > Ef;
+    map<pair<int, int>, double> B, Q, P;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
+    read_probabilities(B, "datasets/gnutella_mv.txt");
 
-    cout << "content" << endl;
-    for (auto &item: Nf) {
-        cout << item.first << "---->";
-        for (auto &feat: item.second) {
-            cout <<  feat << " ";
-        }
-        cout << endl;
-    }
-    for (auto &item: Ef) {
-        cout << item.first << "<-----";
-        for (auto &edge: item.second) {
-            cout << "(" << edge.first << "," << edge.second << ") " ;
-        }
-        cout << endl;
+    pair<int, int> edge;
+    double p;
+    for (auto &item: B) {
+        edge = item.first;
+        p = item.second;
+        printf("%i %i %.2f\n", edge.first, edge.second, p);
     }
 
     return 0;
