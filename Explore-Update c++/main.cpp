@@ -119,7 +119,7 @@ void read_features(string feature_filename, DiGraph G, map<int, vector<int> > &N
     }
 }
 
-void read_probabilities(map<pair<int, int>, double> &P, string prob_filename) {
+void read_probabilities(string prob_filename, map<pair<int, int>, double> &P) {
     ifstream infile(prob_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -128,6 +128,25 @@ void read_probabilities(map<pair<int, int>, double> &P, string prob_filename) {
     double p;
     while (infile >> u >> v >> p) {
         P[make_pair(u, v)] = p;
+    }
+}
+
+void read_groups(string group_filename, map<int, vector<int> > &groups) {
+
+    ifstream infile(group_filename);
+    if (infile==NULL){
+        cout << "Unable to open the input file\n";
+    }
+    string line;
+    vector<string> line_splitted;
+
+    while (getline(infile, line)) {
+        boost::split(line_splitted, line, boost::is_any_of(" "));
+        vector<int> nodes;
+        for (int i = 1; i < line_splitted.size(); ++i) {
+            nodes.push_back(stoi(line_splitted[i]));
+        }
+        groups[stoi(line_splitted[0])] = nodes;
     }
 }
 
@@ -142,18 +161,12 @@ int main(int argc, char* argv[]) {
     map<int, vector<int> > Nf;
     map<int, vector<pair<int, int> > > Ef;
     map<pair<int, int>, double> B, Q, P;
+    map<int, vector<int> > groups;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
-    read_probabilities(B, "datasets/gnutella_mv.txt");
-
-    pair<int, int> edge;
-    double p;
-    for (auto &item: B) {
-        edge = item.first;
-        p = item.second;
-        printf("%i %i %.2f\n", edge.first, edge.second, p);
-    }
+    read_probabilities("datasets/gnutella_mv.txt", B);
+    read_groups("datasets/gnutella_com.txt", groups);
 
     return 0;
 }
