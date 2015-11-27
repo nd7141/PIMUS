@@ -184,6 +184,58 @@ void decrease_probabilities(edge_prob changed, edge_prob &P) {
     }
 }
 
+double calculate_spread(DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, vector<int> S,
+                        vector<int> F, map<int, vector<pair<int, int> > > Ef, int I) {
+
+    edge_prob Prob;
+    pair<int, int> edge;
+    double p;
+    for (auto &item: B) {
+        edge = item.first;
+        p = item.second;
+        Prob[edge] = p;
+    }
+
+    vector<pair<int, int> > E;
+    for (int i =0; i<F.size(); ++i) {
+        for (int j=0; j < Ef[F[i]].size(); ++j) {
+            E.push_back(Ef[F[i]][j]);
+        }
+    }
+
+    increase_probabilities(G, B, Q, Nf, F, E, Prob);
+
+    double spread=0;
+
+    pair<vertex_iter, vertex_iter> vp;
+    map activated <int, bool>;
+    vector<int> T;
+    out_edge_iter ei, e_end;
+    for (int it=0; it < I; ++it) {
+        for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first)
+            activated[*vp.first] = false;
+        for (int j=0; j < S.size(); ++j) {
+            activated[S[j]] = false;
+            T.push_back(S[j]);
+        }
+        int count = 0;
+        int u;
+        while (count < T.size()) {
+            u = T[count];
+            for (boost::tie(ei, e_end) = out_edges(u, G); ei!=e_end; ++ei) {
+                if (not activated[target(*ei, G)]) {
+//                    TODO write the rest
+                }
+            }
+
+            ++count;
+        }
+    }
+
+
+
+}
+
 int main(int argc, char* argv[]) {
     // read parameters from command-line
     if (argc > 1) {
