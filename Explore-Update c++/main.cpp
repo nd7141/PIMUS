@@ -211,7 +211,7 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
     out_edge_iter ei, e_end;
     for (int it=0; it < I; ++it) {
         for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first) {
-            u = *vp.first;
+            u = (int)*vp.first;
             activated[u] = false;
         }
         for (int j=0; j < S.size(); ++j) {
@@ -276,6 +276,59 @@ pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q
         influence[F.size()] = max_spread;
     }
     return make_pair(F, influence);
+}
+
+map<int, DiGraph> explore(DiGraph G, edge_prob P, vector<int> S, double theta) {
+
+    double max_num = numeric_limits<double>::max();
+    double min_dist;
+    pair<int, int> min_edge;
+    int V = num_vertices(G);
+    map<pair<int, int>, double> edge_weights;
+    out_edge_iter ei, e_end;
+    map<int, DiGraph> Ain;
+
+
+    for (auto &v: S) {
+        map<int, vector<pair<int, int> > > MIPs;
+        MIPs[v] = {};
+
+        set<pair<int, int> > crossing_edges;
+        for (boost::tie(ei, e_end) = out_edges(v, G); ei!=e_end; ++ei) {
+            crossing_edges.insert(make_pair(source(*ei, G), target(*ei, G)));
+        }
+        map<int, double> dist;
+        dist[v] = 0;
+
+        while (true) {
+            if (crossing_edges.size() == 0)
+                break;
+
+            min_dist = max_num;
+            min_edge = make_pair(V+1, V+1);
+
+            for (auto &edge: crossing_edges) {
+                if (edge_weights.find(edge) == edge_weights.end()) {
+                    edge_weights[edge] = -log(P[edge]);
+                }
+                if (edge_weights[edge] + dist[edge.first] < min_dist and edge <= min_edge) {
+                    min_dist = edge_weights[edge] + dist[edge.first];
+                    min_edge = edge;
+                }
+            }
+            if (min_dist <= -log(theta)) {
+                dist[min_edge.second] = min_dist;
+                MIPs[min_edge.second] = MIPs[min_edge.first];
+                MIPs[min_edge.second].push_back(min_edge);
+
+//                TODO write update of crossing edges
+            }
+
+        }
+
+    }
+
+    return Ain;
 }
 
 int main(int argc, char* argv[]) {
