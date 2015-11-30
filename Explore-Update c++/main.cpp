@@ -6,6 +6,7 @@
 #include <time.h>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
+#include <ctime>
 
 using namespace std;
 
@@ -239,8 +240,8 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
     return spread/I;
 }
 
-vector<int> greedy(DiGraph G, edge_prob B, edge_prob Q, vector<int> S, map<int, vector<int> > Nf,
-                   map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
+pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, vector<int> S, map<int,
+        vector<int> > Nf, map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
     vector<int> F;
     edge_prob P;
     map<int, bool> selected;
@@ -251,7 +252,6 @@ vector<int> greedy(DiGraph G, edge_prob B, edge_prob Q, vector<int> S, map<int, 
 
     P.insert(B.begin(), B.end());
 
-    int count = 0;
     while (F.size() < K) {
         max_spread = -1;
         printf("it = %i; ", (int)F.size() + 1);
@@ -270,16 +270,16 @@ vector<int> greedy(DiGraph G, edge_prob B, edge_prob Q, vector<int> S, map<int, 
             }
         }
         F.push_back(max_feature);
+        selected[max_feature] = true;
         printf("f = %i; spread = %.2f\n", max_feature, max_spread);
         increase_probabilities(G, B, Q, Nf, F, Ef[max_feature], P);
         influence[F.size()] = max_spread;
     }
-    return F;
+    return make_pair(F, influence);
 }
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
-
     // read parameters from command-line
     if (argc > 1) {
         const string path = argv[1]; // prefix path to directory with necessary files
@@ -294,6 +294,7 @@ int main(int argc, char* argv[]) {
     vector<int> F;
     vector<int> S;
     int I, K;
+    map<int, double> influence;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
@@ -307,16 +308,22 @@ int main(int argc, char* argv[]) {
     }
 
     S = groups[1];
-    I = 5;
+    I = 100;
     K = 2;
 
-    F = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
-    cout << "F = ";
+    clock_t begin = clock();
+    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
+    clock_t finish = clock();
+    printf("Time = %.4f sec.", (double) (finish - begin)/CLOCKS_PER_SEC);
+    cout << " F = ";
     for (int i = 0; i < F.size(); ++i)
         cout << F[i] << " ";
+    cout << endl;
+    for (auto &item: influence) {
+        printf("%i %f", item.first, item.second);
+    }
 
 
-    cout << "Spread: " << calculate_spread(G, B, Q, Nf, S, F, Ef, I) << endl;
-
+//    cout << "Spread: " << calculate_spread(G, B, Q, Nf, S, F, Ef, I) << endl;
     return 0;
 }
