@@ -4,6 +4,8 @@
 #include <boost/algorithm/string.hpp>
 #include <unordered_set>
 #include <time.h>
+#include <boost/range/adaptors.hpp>
+#include <boost/range/algorithm.hpp>
 
 using namespace std;
 
@@ -188,13 +190,7 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
                         vector<int> F, map<int, vector<pair<int, int> > > Ef, int I) {
 
     edge_prob Prob;
-    pair<int, int> edge;
-    double p;
-    for (auto &item: B) {
-        edge = item.first;
-        p = item.second;
-        Prob[edge] = p;
-    }
+    Prob.insert(B.begin(), B.end());
 
     vector<pair<int, int> > E;
     for (int i =0; i<F.size(); ++i) {
@@ -210,9 +206,9 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
     map<int, bool> activated;
     vector<int> T;
     int u, v;
+    double p;
     out_edge_iter ei, e_end;
     for (int it=0; it < I; ++it) {
-        cout << "it=" << it << endl;
         for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first) {
             u = *vp.first;
             activated[u] = false;
@@ -243,6 +239,44 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
     return spread/I;
 }
 
+vector<int> greedy(DiGraph G, edge_prob B, edge_prob Q, vector<int> S, map<int, vector<int> > Nf,
+                   map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
+    vector<int> F;
+    edge_prob P;
+    map<int, bool> selected;
+    edge_prob changed;
+    double spread, max_spread;
+    int max_feature;
+    map<int, double> influence;
+
+    P.insert(B.begin(), B.end());
+
+    int count = 0;
+    while (F.size() < K) {
+        max_spread = -1;
+        printf("it = %i; ", (int)F.size() + 1);
+        fflush(stdout);
+        for (auto &f: Phi) {
+            if (not selected[f]) {
+                F.push_back(f);
+                changed = increase_probabilities(G, B, Q, Nf, F, Ef[f], P);
+                spread = calculate_spread(G, B, Q, Nf, S, F, Ef, I);
+                if (spread > max_spread) {
+                    max_spread = spread;
+                    max_feature = f;
+                }
+                decrease_probabilities(changed, P);
+                F.pop_back();
+            }
+        }
+        F.push_back(max_feature);
+        printf("f = %i; spread = %.2f\n", max_feature, max_spread);
+        increase_probabilities(G, B, Q, Nf, F, Ef[max_feature], P);
+        influence[F.size()] = max_spread;
+    }
+    return F;
+}
+
 int main(int argc, char* argv[]) {
     srand(time(NULL));
 
@@ -259,7 +293,7 @@ int main(int argc, char* argv[]) {
     map<int, vector<int> > groups;
     vector<int> F;
     vector<int> S;
-    int I;
+    int I, K;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
@@ -267,11 +301,20 @@ int main(int argc, char* argv[]) {
     read_probabilities("datasets/gnutella_mv.txt", Q);
     read_groups("datasets/gnutella_com.txt", groups);
 
-    F.push_back(2);
-    read_probabilities("datasets/gnutella_mv.txt", P);
+    vector<int> Phi;
+    for (auto &item: Ef) {
+        Phi.push_back(item.first);
+    }
 
-    S = groups[3];
-    I = 100;
+    S = groups[1];
+    I = 5;
+    K = 2;
+
+    F = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
+    cout << "F = ";
+    for (int i = 0; i < F.size(); ++i)
+        cout << F[i] << " ";
+
 
     cout << "Spread: " << calculate_spread(G, B, Q, Nf, S, F, Ef, I) << endl;
 
