@@ -2,8 +2,8 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
-//#include <algorithm>
 #include <unordered_set>
+#include <time.h>
 
 using namespace std;
 
@@ -184,7 +184,7 @@ void decrease_probabilities(edge_prob changed, edge_prob &P) {
     }
 }
 
-double calculate_spread(DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, vector<int> S,
+double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, vector<int> S,
                         vector<int> F, map<int, vector<pair<int, int> > > Ef, int I) {
 
     edge_prob Prob;
@@ -206,37 +206,46 @@ double calculate_spread(DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int
     increase_probabilities(G, B, Q, Nf, F, E, Prob);
 
     double spread=0;
-
     pair<vertex_iter, vertex_iter> vp;
-    map activated <int, bool>;
+    map<int, bool> activated;
     vector<int> T;
+    int u, v;
     out_edge_iter ei, e_end;
     for (int it=0; it < I; ++it) {
-        for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first)
-            activated[*vp.first] = false;
+        cout << "it=" << it << endl;
+        for (vp = boost::vertices(G); vp.first != vp.second; ++vp.first) {
+            u = *vp.first;
+            activated[u] = false;
+        }
         for (int j=0; j < S.size(); ++j) {
             activated[S[j]] = false;
             T.push_back(S[j]);
         }
         int count = 0;
-        int u;
         while (count < T.size()) {
             u = T[count];
             for (boost::tie(ei, e_end) = out_edges(u, G); ei!=e_end; ++ei) {
-                if (not activated[target(*ei, G)]) {
-//                    TODO write the rest
+                v = target(*ei, G);
+                if (not activated[v]) {
+                    p = Prob[make_pair(u, v)];
+                    double r = ((double) rand() / (RAND_MAX));
+                    if (r < p) {
+                        activated[v] = true;
+                        T.push_back(v);
+                    }
                 }
             }
-
             ++count;
         }
+        spread += T.size();
+        T.clear();
     }
-
-
-
+    return spread/I;
 }
 
 int main(int argc, char* argv[]) {
+    srand(time(NULL));
+
     // read parameters from command-line
     if (argc > 1) {
         const string path = argv[1]; // prefix path to directory with necessary files
@@ -249,6 +258,8 @@ int main(int argc, char* argv[]) {
     edge_prob B, Q, P;
     map<int, vector<int> > groups;
     vector<int> F;
+    vector<int> S;
+    int I;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
@@ -256,20 +267,13 @@ int main(int argc, char* argv[]) {
     read_probabilities("datasets/gnutella_mv.txt", Q);
     read_groups("datasets/gnutella_com.txt", groups);
 
-    F.push_back(1);
+    F.push_back(2);
     read_probabilities("datasets/gnutella_mv.txt", P);
-    edge_prob changed;
-    changed = increase_probabilities(G, B, Q, Nf, F, Ef[1], P);
-    decrease_probabilities(changed, P);
 
-    pair<int, int> edge;
-    double p;
-    for (auto &item: changed) {
-        edge = item.first;
-        p = item.second;
-        cout << edge.first << " " << edge.second << " ";
-        cout << B[edge] << " " << P[edge] << endl;
-    }
+    S = groups[3];
+    I = 100;
+
+    cout << "Spread: " << calculate_spread(G, B, Q, Nf, S, F, Ef, I) << endl;
 
     return 0;
 }
