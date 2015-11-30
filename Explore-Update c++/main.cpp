@@ -320,7 +320,6 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, vector<int> S, double theta) {
                 dist[min_edge.second] = min_dist;
                 MIPs[min_edge.second] = MIPs[min_edge.first];
                 MIPs[min_edge.second].push_back(min_edge);
-
 //                TODO write update of crossing edges
             }
 
