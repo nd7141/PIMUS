@@ -10,7 +10,10 @@
 
 using namespace std;
 
+struct vertex_info {int label;};
+
 typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::bidirectionalS> DiGraph;
+typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::bidirectionalS, vertex_info> SubGraph;
 typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
 typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
@@ -293,6 +296,7 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
     set<pair<int, int> > crossing_edges;
     map<int, vector<pair<int, int> > > MIPs;
     map<int, DiGraph> Ain;
+    map<int, set<pair<int, int> > > Ain_edges;
 
 
     for (auto &v: S) {
@@ -323,6 +327,9 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
                 dist[min_edge.second] = min_dist;
                 MIPs[min_edge.second] = MIPs[min_edge.first];
                 MIPs[min_edge.second].push_back(min_edge);
+                for (auto &edge: MIPs[min_edge.second]) {
+                    Ain_edges[min_edge.second].insert(edge);
+                }
 
                 for (boost::tie(qi, q_end) = in_edges(min_edge.second, G); qi!=q_end; ++qi) {
                     crossing_edges.erase(make_pair(source(*qi, G), target(*qi, G)));
@@ -354,6 +361,7 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
         crossing_edges.clear();
         MIPs.clear();
     }
+    cout << "Ain_edges = " << Ain_edges.size() << endl;
     return Ain;
 }
 
@@ -396,7 +404,7 @@ int main(int argc, char* argv[]) {
     }
     I = 100;
     K = 2;
-    theta = 1./40;
+    theta = 1./320;
     cout << "I: " << I << endl;
     cout << "K: " << K << endl;
 
