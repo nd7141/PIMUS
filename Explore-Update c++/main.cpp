@@ -313,7 +313,8 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
                 if (edge_weights.find(edge) == edge_weights.end()) {
                     edge_weights[edge] = -log(P[edge]);
                 }
-                if (edge_weights[edge] + dist[edge.first] < min_dist and edge <= min_edge) {
+                if (edge_weights[edge] + dist[edge.first] < min_dist or
+                        (edge_weights[edge] + dist[edge.first] == min_dist and edge <= min_edge)) {
                     min_dist = edge_weights[edge] + dist[edge.first];
                     min_edge = edge;
                 }
@@ -328,7 +329,7 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
                 }
                 for (boost::tie(ei, e_end) = out_edges(min_edge.second, G); ei!=e_end; ++ei) {
                     int end2 = target(*ei, G);
-                    if (MIPs.find(end2) == MIPs.end() and S.find(end2) == S.end()) {
+                    if (MIPs.find(end2) == MIPs.end()) {
                         crossing_edges.insert(make_pair(min_edge.second, end2));
                     }
                 }
@@ -374,6 +375,7 @@ int main(int argc, char* argv[]) {
     int I, K;
     map<int, double> influence;
     double theta;
+    in_edge_iter qi, q_end;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
@@ -388,7 +390,10 @@ int main(int argc, char* argv[]) {
     }
 
 //    setup
-    S = groups[4];
+    S = groups[2];
+    for (auto &node: S) {
+        boost::clear_in_edges(node, G);
+    }
     I = 100;
     K = 2;
     theta = 1./40;
@@ -408,10 +413,12 @@ int main(int argc, char* argv[]) {
 //        printf("%i %f\n", item.first, item.second);
 //    }
 
-    map<int, DiGraph> Ain = explore(G, P, S, theta);
-    cout << Ain.size() << endl;
+    map<int, DiGraph> Ain;
+    Ain= explore(G, P, S, theta);
+    cout << Ain.size() << " " << S.size() << endl;
     for (auto &item: Ain) {
-        cout << item.first << " " << num_vertices(item.second) << endl;
+        if (num_edges(item.second) > 1)
+            cout << item.first << " " << num_edges(item.second) << endl;
     }
 
     return 0;
