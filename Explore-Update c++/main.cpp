@@ -137,7 +137,7 @@ void read_probabilities(string prob_filename, edge_prob &P) {
 }
 
 
-void read_groups(string group_filename, map<int, vector<int> > &groups) {
+void read_groups(string group_filename, map<int, set<int> > &groups) {
     ifstream infile(group_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -147,9 +147,9 @@ void read_groups(string group_filename, map<int, vector<int> > &groups) {
 
     while (getline(infile, line)) {
         boost::split(line_splitted, line, boost::is_any_of(" "));
-        vector<int> nodes;
+        set<int> nodes;
         for (int i = 1; i < line_splitted.size(); ++i) {
-            nodes.push_back(stoi(line_splitted[i]));
+            nodes.insert(stoi(line_splitted[i]));
         }
         groups[stoi(line_splitted[0])] = nodes;
     }
@@ -187,7 +187,7 @@ void decrease_probabilities(edge_prob changed, edge_prob &P) {
     }
 }
 
-double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, vector<int> S,
+double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, set<int> S,
                         vector<int> F, map<int, vector<pair<int, int> > > Ef, int I) {
 
     edge_prob Prob;
@@ -214,9 +214,9 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
             u = (int)*vp.first;
             activated[u] = false;
         }
-        for (int j=0; j < S.size(); ++j) {
-            activated[S[j]] = false;
-            T.push_back(S[j]);
+        for (auto &node: S) {
+            activated[node] = false;
+            T.push_back(node);
         }
         int count = 0;
         while (count < T.size()) {
@@ -240,8 +240,9 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
     return spread/I;
 }
 
-pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, vector<int> S, map<int,
+pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, set<int> S, map<int,
         vector<int> > Nf, map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
+
     vector<int> F;
     edge_prob P;
     map<int, bool> selected;
@@ -278,27 +279,28 @@ pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q
     return make_pair(F, influence);
 }
 
-map<int, DiGraph> explore(DiGraph G, edge_prob P, vector<int> S, double theta) {
+map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
 
     double max_num = numeric_limits<double>::max();
     double min_dist;
-    pair<int, int> min_edge;
+    pair<int, int> min_edge, mip_edge;
+    pair<DiGraph::edge_descriptor, bool> edge_insertion;
     int V = num_vertices(G);
     map<pair<int, int>, double> edge_weights;
     out_edge_iter ei, e_end;
+    in_edge_iter qi, q_end;
+    map<int, double> dist;
+    set<pair<int, int> > crossing_edges;
+    map<int, vector<pair<int, int> > > MIPs;
     map<int, DiGraph> Ain;
 
 
     for (auto &v: S) {
-        map<int, vector<pair<int, int> > > MIPs;
         MIPs[v] = {};
-
-        set<pair<int, int> > crossing_edges;
+        dist[v] = 0;
         for (boost::tie(ei, e_end) = out_edges(v, G); ei!=e_end; ++ei) {
             crossing_edges.insert(make_pair(source(*ei, G), target(*ei, G)));
         }
-        map<int, double> dist;
-        dist[v] = 0;
 
         while (true) {
             if (crossing_edges.size() == 0)
@@ -320,13 +322,37 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, vector<int> S, double theta) {
                 dist[min_edge.second] = min_dist;
                 MIPs[min_edge.second] = MIPs[min_edge.first];
                 MIPs[min_edge.second].push_back(min_edge);
-//                TODO write update of crossing edges
-            }
 
+                for (boost::tie(qi, q_end) = in_edges(min_edge.second, G); qi!=q_end; ++qi) {
+                    crossing_edges.erase(make_pair(source(*qi, G), target(*qi, G)));
+                }
+                for (boost::tie(ei, e_end) = out_edges(min_edge.second, G); ei!=e_end; ++ei) {
+                    int end2 = target(*ei, G);
+                    if (MIPs.find(end2) == MIPs.end() and S.find(end2) == S.end()) {
+                        crossing_edges.insert(make_pair(min_edge.second, end2));
+                    }
+                }
+            }
+            else
+                break;
         }
 
+        for (auto &item: MIPs) {
+            int node = item.first;
+            if (S.find(node) == S.end()) {
+                for (int j=0; j<MIPs[node].size(); ++j) {
+                    mip_edge = MIPs[node][j];
+                    edge_insertion = boost::add_edge(mip_edge.first, mip_edge.second, Ain[node]);
+                    if (not edge_insertion.second) {
+                        cout << "Unable to inset edge in MIP in explore procedure" << endl;
+                    }
+                }
+            }
+        }
+        dist.clear();
+        crossing_edges.clear();
+        MIPs.clear();
     }
-
     return Ain;
 }
 
@@ -342,16 +368,18 @@ int main(int argc, char* argv[]) {
     map<int, vector<int> > Nf;
     map<int, vector<pair<int, int> > > Ef;
     edge_prob B, Q, P;
-    map<int, vector<int> > groups;
+    map<int, set<int> > groups;
     vector<int> F;
-    vector<int> S;
+    set<int> S;
     int I, K;
     map<int, double> influence;
+    double theta;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
     read_probabilities("datasets/gnutella_mv.txt", B);
     read_probabilities("datasets/gnutella_mv.txt", Q);
+    read_probabilities("datasets/gnutella_mv.txt", P);
     read_groups("datasets/gnutella_com.txt", groups);
 
     vector<int> Phi;
@@ -359,23 +387,32 @@ int main(int argc, char* argv[]) {
         Phi.push_back(item.first);
     }
 
-    S = groups[1];
+//    setup
+    S = groups[4];
     I = 100;
     K = 2;
+    theta = 1./40;
+    cout << "I: " << I << endl;
+    cout << "K: " << K << endl;
 
-    clock_t begin = clock();
-    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
-    clock_t finish = clock();
-    printf("Time = %.4f sec.", (double) (finish - begin)/CLOCKS_PER_SEC);
-    cout << " F = ";
-    for (int i = 0; i < F.size(); ++i)
-        cout << F[i] << " ";
-    cout << endl;
-    for (auto &item: influence) {
-        printf("%i %f", item.first, item.second);
+//    greedy algorithm
+//    clock_t begin = clock();
+//    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
+//    clock_t finish = clock();
+//    printf("Time = %.4f sec.", (double) (finish - begin)/CLOCKS_PER_SEC);
+//    cout << " F = ";
+//    for (int i = 0; i < F.size(); ++i)
+//        cout << F[i] << " ";
+//    cout << endl;
+//    for (auto &item: influence) {
+//        printf("%i %f\n", item.first, item.second);
+//    }
+
+    map<int, DiGraph> Ain = explore(G, P, S, theta);
+    cout << Ain.size() << endl;
+    for (auto &item: Ain) {
+        cout << item.first << " " << num_vertices(item.second) << endl;
     }
 
-
-//    cout << "Spread: " << calculate_spread(G, B, Q, Nf, S, F, Ef, I) << endl;
     return 0;
 }
