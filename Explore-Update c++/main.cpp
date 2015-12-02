@@ -410,6 +410,36 @@ double update(map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P
     return total;
 }
 
+set<pair<int, int> > get_pi(DiGraph G, map<int, set<pair<int, int> > > Ain_edges, set<int> S) {
+    set<pair<int, int> > Pi;
+    out_edge_iter ei, e_end;
+    in_edge_iter qi, q_end;
+    vertex_iter vi, v_end;
+    set<int> Pi_nodes;
+
+    Pi_nodes.insert(S.begin(), S.end());
+    for (auto &item: Ain_edges) {
+        Pi_nodes.insert(item.first);
+    }
+
+    for (auto &node: Pi_nodes) {
+        for (boost::tie(ei, e_end) = out_edges(node, G); ei!=e_end; ++ei) {
+            Pi.insert(make_pair(source(*ei, G), target(*ei, G)));
+        }
+        for (boost::tie(qi, q_end) = in_edges(node, G); qi!=q_end; ++qi) {
+            Pi.insert(make_pair(source(*qi, G), target(*qi, G)));
+        }
+    }
+    return Pi;
+}
+
+set<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set<int> S, map<int,
+        vector<int> > Nf, map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K) {
+
+
+}
+
+
 int main(int argc, char* argv[]) {
     srand(time(NULL));
     // read parameters from command-line
@@ -468,6 +498,8 @@ int main(int argc, char* argv[]) {
 
     map<int, set<pair<int, int> > > Ain_edges;
     Ain_edges= explore(G, P, S, theta);
+    set<pair<int, int> > Pi = get_pi(G, Ain_edges, S);
+    cout << "|Pi| = " << Pi.size() << endl;
     double total = update(Ain_edges, S, P);
     cout << total << endl;
 
