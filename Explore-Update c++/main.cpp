@@ -352,14 +352,17 @@ map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, doub
     return Ain_edges;
 }
 
-SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v) {
+SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v, int root) {
     SubGraph Ain_v;
-
     int u, v, count=0;
     map<int, int> mapped;
     edge_t e; bool b;
     vertex_t vertex;
 
+    mapped[root] = count;
+    vertex = boost::add_vertex(Ain_v);
+    Ain_v[vertex].label = root;
+    count++;
     for (auto &edge: Ain_edges_v) {
         u = edge.first; v = edge.second;
         if (mapped.find(u) == mapped.end()) {
@@ -381,17 +384,18 @@ SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v) {
     return Ain_v;
 }
 
-double calculate_ap(int u, SubGraph Ain_v, set<int> S, edge_prob P) {
-    if (S.find(u) != S.end())
+double calculate_ap(vertex_t u, SubGraph Ain_v, set<int> S, edge_prob P) {
+    if (S.find(Ain_v[u].label) != S.end())
         return 1;
     else {
-        double prod = 1, ap_node;
-        int node;
+        double prod = 1, ap_node, p;
         in_edge_iter qi, q_end;
+        vertex_t node;
         for (boost::tie(qi, q_end)=in_edges(u, Ain_v); qi!=q_end; ++qi) {
             node = source(*qi, Ain_v);
             ap_node = calculate_ap(node, Ain_v, S, P);
-            prod *= (1 - ap_node*P[make_pair(node, u)]);
+            p = P[make_pair(Ain_v[node].label, Ain_v[u].label)];
+            prod *= (1 - ap_node*p);
         }
         return 1 - prod;
     }
@@ -455,24 +459,14 @@ int main(int argc, char* argv[]) {
 
     map<int, set<pair<int, int> > > Ain_edges;
     Ain_edges= explore(G, P, S, theta);
-//    int node;
-//    for (auto &item: Ain_edges) {
-//        node = item.first;
-//        cout << node << endl;
-//        SubGraph Ain_v = make_subgraph(Ain_edges[node]);
-//        pair<vertex_iter, vertex_iter> vp;
-//        for (vp = boost::vertices(Ain_v); vp.first != vp.second; ++vp.first)
-//            cout << *vp.first << " " << Ain_v[*vp.first].label << endl;
-//        edge_iter ei, edge_end;
-//        for (boost::tie(ei, edge_end) = edges(Ain_v); ei != edge_end; ++ei) {
-//            cout << source(*ei, G) << " " << target(*ei, G) <<  ";";
-//        }
-//        cout << endl;
-//        cout << endl;
-//    }
-
-    SubGraph Ain_v = make_subgraph(Ain_edges[4]);
-
+    int node;
+    double ap;
+    for (auto &item: Ain_edges) {
+        node = item.first;
+        SubGraph Ain_v = make_subgraph(Ain_edges[node], node);
+        ap = calculate_ap(0, Ain_v, S, P); // root is always 0
+        cout << node << " " << ap << endl;
+    }
 
 
     return 0;
