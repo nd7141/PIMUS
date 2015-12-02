@@ -401,6 +401,15 @@ double calculate_ap(vertex_t u, SubGraph Ain_v, set<int> S, edge_prob P) {
     }
 }
 
+double update(map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
+    double total = 0;
+    for (auto &item: Ain_edges) {
+        SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
+        total += calculate_ap(0, Ain_v, S, P); // root is always 0
+    }
+    return total;
+}
+
 int main(int argc, char* argv[]) {
     srand(time(NULL));
     // read parameters from command-line
@@ -459,14 +468,8 @@ int main(int argc, char* argv[]) {
 
     map<int, set<pair<int, int> > > Ain_edges;
     Ain_edges= explore(G, P, S, theta);
-    int node;
-    double ap;
-    for (auto &item: Ain_edges) {
-        node = item.first;
-        SubGraph Ain_v = make_subgraph(Ain_edges[node], node);
-        ap = calculate_ap(0, Ain_v, S, P); // root is always 0
-        cout << node << " " << ap << endl;
-    }
+    double total = update(Ain_edges, S, P);
+    cout << total << endl;
 
 
     return 0;
