@@ -14,6 +14,8 @@ struct vertex_info {int label;};
 
 typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::bidirectionalS> DiGraph;
 typedef boost::adjacency_list <boost::vecS, boost::vecS, boost::bidirectionalS, vertex_info> SubGraph;
+typedef boost::graph_traits<SubGraph>::vertex_descriptor vertex_t;
+typedef boost::graph_traits<SubGraph>::edge_descriptor edge_t;
 typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
 typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
@@ -282,7 +284,7 @@ pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q
     return make_pair(F, influence);
 }
 
-map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
+map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, double theta) {
 
     double max_num = numeric_limits<double>::max();
     double min_dist;
@@ -295,7 +297,6 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
     map<int, double> dist;
     set<pair<int, int> > crossing_edges;
     map<int, vector<pair<int, int> > > MIPs;
-    map<int, DiGraph> Ain;
     map<int, set<pair<int, int> > > Ain_edges;
 
 
@@ -344,25 +345,56 @@ map<int, DiGraph> explore(DiGraph G, edge_prob P, set<int> S, double theta) {
             else
                 break;
         }
-
-        for (auto &item: MIPs) {
-            int node = item.first;
-            if (S.find(node) == S.end()) {
-                for (int j=0; j<MIPs[node].size(); ++j) {
-                    mip_edge = MIPs[node][j];
-                    edge_insertion = boost::add_edge(mip_edge.first, mip_edge.second, Ain[node]);
-                    if (not edge_insertion.second) {
-                        cout << "Unable to inset edge in MIP in explore procedure" << endl;
-                    }
-                }
-            }
-        }
         dist.clear();
         crossing_edges.clear();
         MIPs.clear();
     }
-    cout << "Ain_edges = " << Ain_edges.size() << endl;
-    return Ain;
+    return Ain_edges;
+}
+
+SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v) {
+    SubGraph Ain_v;
+
+    int u, v, count=0;
+    map<int, int> mapped;
+    edge_t e; bool b;
+    vertex_t vertex;
+
+    for (auto &edge: Ain_edges_v) {
+        u = edge.first; v = edge.second;
+        if (mapped.find(u) == mapped.end()) {
+            mapped[u] = count;
+            vertex = boost::add_vertex(Ain_v);
+            Ain_v[vertex].label = u;
+            count++;
+        }
+        if (mapped.find(v) == mapped.end()) {
+            mapped[v] = count;
+            vertex = boost::add_vertex(Ain_v);
+            Ain_v[vertex].label = v;
+            count++;
+        }
+        boost::tie(e, b) = boost::add_edge(mapped[u], mapped[v], Ain_v);
+        if (not b)
+            cout << "Unable to insert an edge in Ain_v" << endl;
+    }
+    return Ain_v;
+}
+
+double calculate_ap(int u, SubGraph Ain_v, set<int> S, edge_prob P) {
+    if (S.find(u) != S.end())
+        return 1;
+    else {
+        double prod = 1, ap_node;
+        int node;
+        in_edge_iter qi, q_end;
+        for (boost::tie(qi, q_end)=in_edges(u, Ain_v); qi!=q_end; ++qi) {
+            node = source(*qi, Ain_v);
+            ap_node = calculate_ap(node, Ain_v, S, P);
+            prod *= (1 - ap_node*P[make_pair(node, u)]);
+        }
+        return 1 - prod;
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -421,13 +453,27 @@ int main(int argc, char* argv[]) {
 //        printf("%i %f\n", item.first, item.second);
 //    }
 
-    map<int, DiGraph> Ain;
-    Ain= explore(G, P, S, theta);
-    cout << Ain.size() << " " << S.size() << endl;
-    for (auto &item: Ain) {
-        if (num_edges(item.second) > 1)
-            cout << item.first << " " << num_edges(item.second) << endl;
-    }
+    map<int, set<pair<int, int> > > Ain_edges;
+    Ain_edges= explore(G, P, S, theta);
+//    int node;
+//    for (auto &item: Ain_edges) {
+//        node = item.first;
+//        cout << node << endl;
+//        SubGraph Ain_v = make_subgraph(Ain_edges[node]);
+//        pair<vertex_iter, vertex_iter> vp;
+//        for (vp = boost::vertices(Ain_v); vp.first != vp.second; ++vp.first)
+//            cout << *vp.first << " " << Ain_v[*vp.first].label << endl;
+//        edge_iter ei, edge_end;
+//        for (boost::tie(ei, edge_end) = edges(Ain_v); ei != edge_end; ++ei) {
+//            cout << source(*ei, G) << " " << target(*ei, G) <<  ";";
+//        }
+//        cout << endl;
+//        cout << endl;
+//    }
+
+    SubGraph Ain_v = make_subgraph(Ain_edges[4]);
+
+
 
     return 0;
 }
