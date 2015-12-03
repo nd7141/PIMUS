@@ -428,30 +428,34 @@ double calculate_ap2(SubGraph Ain_v, set<int> S, edge_prob P) {
 }
 
 double update(unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
-    double total = 0, tmp=1;
-    unordered_map<int, int> in_degrees;
-    bool pathed = true;
+    double total = 0, path_prob;
+    unordered_set<int> mip;
+    bool pathed;
     clock_t begin, finish;
     double timed = 0;
     for (auto &item: Ain_edges) {
-//         micro optimization
+        pathed = true;
+        path_prob = 1;
+//      optimization for simple paths
         set<pair<int, int> > edges = item.second;
         for (auto &e: edges) {
-            ++in_degrees[e.second];
-            if (in_degrees[e.second] > 1) {
+            if (mip.find(e.second) != mip.end()) {
                 pathed = false;
                 break;
             }
-            tmp *= P[e];
+            else {
+                mip.insert(e.second);
+                path_prob *= P[e];
+            }
         }
         if (pathed) {
-            total += tmp;
+            total += path_prob;
         }
         else {
-            begin = clock();
             SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
-            timed += (double) (clock() - begin)/(CLOCKS_PER_SEC);
+            begin = clock();
             total += calculate_ap2(Ain_v, S, P);
+            timed += (double) (clock() - begin)/(CLOCKS_PER_SEC);
         }
     }
     cout << "Time spent on making graph is " << timed << endl;
@@ -602,6 +606,15 @@ int main(int argc, char* argv[]) {
     clock_t begin, finish;
     begin = clock();
     Ain_edges = explore(G, P, S, theta);
+//    for (auto &item: Ain_edges) {
+//        cout << item.first << "-->";
+//        for (auto &e: item.second) {
+//            cout << e.first << " " << e.second << ";";
+//        }
+//        cout << endl;
+//    }
+
+
     begin = clock();
     double total = update(Ain_edges, S, P);
     finish = clock();
