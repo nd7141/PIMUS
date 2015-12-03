@@ -6,6 +6,7 @@
 #include <time.h>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
+#include <boost/graph/topological_sort.hpp>
 #include <unordered_map>
 #include <ctime>
 
@@ -402,13 +403,58 @@ double calculate_ap(vertex_t u, SubGraph Ain_v, set<int> S, edge_prob P) {
     }
 }
 
-double update(unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
-    double total = 0;
-    clock_t begin, finish;
-    for (auto &item: Ain_edges) {
-        SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
-        total += calculate_ap(0, Ain_v, S, P); // root is always 0
+double calculate_ap2(SubGraph Ain_v, set<int> S, edge_prob P) {
+    vector<vertex_t> topology;
+    topological_sort(Ain_v, back_inserter(topology));
+    unordered_map<vertex_t, double> ap;
+    double p, prod=1;
+    in_edge_iter qi, q_end;
+    vertex_t node;
+
+    for (vector<vertex_t>::reverse_iterator ii=topology.rbegin(); ii!=topology.rend(); ++ii) {
+        if (S.find(Ain_v[*ii].label) != S.end())
+            ap[*ii] = 1;
+        else {
+            prod = 1;
+            for (boost::tie(qi, q_end)=in_edges(*ii, Ain_v); qi!=q_end; ++qi) {
+                node = source(*qi, Ain_v);
+                p = P[make_pair(Ain_v[node].label, Ain_v[*ii].label)];
+                prod *= (1 - ap[node]*p);
+            }
+            ap[*ii] = 1 - prod;
+        }
     }
+    return 1 - prod;
+}
+
+double update(unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
+    double total = 0, tmp=1;
+    unordered_map<int, int> in_degrees;
+    bool pathed = true;
+    clock_t begin, finish;
+    double timed = 0;
+    for (auto &item: Ain_edges) {
+//         micro optimization
+        set<pair<int, int> > edges = item.second;
+        for (auto &e: edges) {
+            ++in_degrees[e.second];
+            if (in_degrees[e.second] > 1) {
+                pathed = false;
+                break;
+            }
+            tmp *= P[e];
+        }
+        if (pathed) {
+            total += tmp;
+        }
+        else {
+            begin = clock();
+            SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
+            timed += (double) (clock() - begin)/(CLOCKS_PER_SEC);
+            total += calculate_ap2(Ain_v, S, P);
+        }
+    }
+    cout << "Time spent on making graph is " << timed << endl;
     return total;
 }
 
@@ -555,11 +601,11 @@ int main(int argc, char* argv[]) {
     unordered_map<int, set<pair<int, int> > > Ain_edges;
     clock_t begin, finish;
     begin = clock();
-    Ain_edges= explore(G, P, S, theta);
+    Ain_edges = explore(G, P, S, theta);
     begin = clock();
     double total = update(Ain_edges, S, P);
     finish = clock();
-    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << endl;
+    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
 
 //    cout << "Start explore-update" << endl;
 //    F = explore_update(G, B, Q, P, S, Nf, Ef, Phi, K, theta);
