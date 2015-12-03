@@ -6,6 +6,7 @@
 #include <time.h>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm.hpp>
+#include <unordered_map>
 #include <ctime>
 
 using namespace std;
@@ -77,22 +78,22 @@ DiGraph read_graph(string graph_filename) {
         cout << "Unable to open the input file\n";
     }
 
-    map<int, int> mapped;
+    unordered_map<int, int> unordered_mapped;
     int u, v;
     int node_count=0;
     pair<DiGraph::edge_descriptor, bool> edge_insertion;
     DiGraph G;
 
     while (infile >> u >> v) {
-        if (mapped.find(u) == mapped.end()) {
-            mapped[u] = node_count;
+        if (unordered_mapped.find(u) == unordered_mapped.end()) {
+            unordered_mapped[u] = node_count;
             node_count++;
         }
-        if (mapped.find(v) == mapped.end()) {
-            mapped[v] = node_count;
+        if (unordered_mapped.find(v) == unordered_mapped.end()) {
+            unordered_mapped[v] = node_count;
             node_count++;
         }
-        edge_insertion=boost::add_edge(mapped[u], mapped[v], G);
+        edge_insertion=boost::add_edge(unordered_mapped[u], unordered_mapped[v], G);
         if (!edge_insertion.second) {
             std::cout << "Unable to insert edge\n";
         }
@@ -100,7 +101,7 @@ DiGraph read_graph(string graph_filename) {
     return G;
 }
 
-void read_features(string feature_filename, DiGraph G, map<int, vector<int> > &Nf, map<int, vector<pair<int, int> > > &Ef) {
+void read_features(string feature_filename, DiGraph G, unordered_map<int, vector<int> > &Nf, unordered_map<int, vector<pair<int, int> > > &Ef) {
 
     string line;
     vector<string> line_splitted;
@@ -142,7 +143,7 @@ void read_probabilities(string prob_filename, edge_prob &P) {
 }
 
 
-void read_groups(string group_filename, map<int, set<int> > &groups) {
+void read_groups(string group_filename, unordered_map<int, set<int> > &groups) {
     ifstream infile(group_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -160,7 +161,7 @@ void read_groups(string group_filename, map<int, set<int> > &groups) {
     }
 }
 
-edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, vector<int> F,
+edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, unordered_map<int, vector<int> > Nf, vector<int> F,
                                  vector<pair<int, int> > E, edge_prob &P) {
     edge_prob changed;
     double q,b,h;
@@ -192,8 +193,8 @@ void decrease_probabilities(edge_prob changed, edge_prob &P) {
     }
 }
 
-double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<int> > Nf, set<int> S,
-                        vector<int> F, map<int, vector<pair<int, int> > > Ef, int I) {
+double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, unordered_map<int, vector<int> > Nf, set<int> S,
+                        vector<int> F, unordered_map<int, vector<pair<int, int> > > Ef, int I) {
 
     edge_prob Prob;
     Prob.insert(B.begin(), B.end());
@@ -209,7 +210,7 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
 
     double spread=0;
     pair<vertex_iter, vertex_iter> vp;
-    map<int, bool> activated;
+    unordered_map<int, bool> activated;
     vector<int> T;
     int u, v;
     double p;
@@ -245,16 +246,16 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, map<int, vector<in
     return spread/I;
 }
 
-pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, set<int> S, map<int,
-        vector<int> > Nf, map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
+pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, set<int> S, unordered_map<int,
+        vector<int> > Nf, unordered_map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
 
     vector<int> F;
     edge_prob P;
-    map<int, bool> selected;
+    unordered_map<int, bool> selected;
     edge_prob changed;
     double spread, max_spread;
     int max_feature;
-    map<int, double> influence;
+    unordered_map<int, double> influence;
 
     P.insert(B.begin(), B.end());
 
@@ -284,7 +285,7 @@ pair<vector<int>, map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q
     return make_pair(F, influence);
 }
 
-map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, double theta) {
+unordered_map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, double theta) {
 
     double max_num = numeric_limits<double>::max();
     double min_dist;
@@ -294,10 +295,10 @@ map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, doub
     map<pair<int, int>, double> edge_weights;
     out_edge_iter ei, e_end;
     in_edge_iter qi, q_end;
-    map<int, double> dist;
+    unordered_map<int, double> dist;
     set<pair<int, int> > crossing_edges;
-    map<int, vector<pair<int, int> > > MIPs;
-    map<int, set<pair<int, int> > > Ain_edges;
+    unordered_map<int, vector<pair<int, int> > > MIPs;
+    unordered_map<int, set<pair<int, int> > > Ain_edges;
 
 
     for (auto &v: S) {
@@ -355,29 +356,29 @@ map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, doub
 SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v, int root) {
     SubGraph Ain_v;
     int u, v, count=0;
-    map<int, int> mapped;
+    unordered_map<int, int> unordered_mapped;
     edge_t e; bool b;
     vertex_t vertex;
 
-    mapped[root] = count;
+    unordered_mapped[root] = count;
     vertex = boost::add_vertex(Ain_v);
     Ain_v[vertex].label = root;
     count++;
     for (auto &edge: Ain_edges_v) {
         u = edge.first; v = edge.second;
-        if (mapped.find(u) == mapped.end()) {
-            mapped[u] = count;
+        if (unordered_mapped.find(u) == unordered_mapped.end()) {
+            unordered_mapped[u] = count;
             vertex = boost::add_vertex(Ain_v);
             Ain_v[vertex].label = u;
             count++;
         }
-        if (mapped.find(v) == mapped.end()) {
-            mapped[v] = count;
+        if (unordered_mapped.find(v) == unordered_mapped.end()) {
+            unordered_mapped[v] = count;
             vertex = boost::add_vertex(Ain_v);
             Ain_v[vertex].label = v;
             count++;
         }
-        boost::tie(e, b) = boost::add_edge(mapped[u], mapped[v], Ain_v);
+        boost::tie(e, b) = boost::add_edge(unordered_mapped[u], unordered_mapped[v], Ain_v);
         if (not b)
             cout << "Unable to insert an edge in Ain_v" << endl;
     }
@@ -401,8 +402,9 @@ double calculate_ap(vertex_t u, SubGraph Ain_v, set<int> S, edge_prob P) {
     }
 }
 
-double update(map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
+double update(unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
     double total = 0;
+    clock_t begin, finish;
     for (auto &item: Ain_edges) {
         SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
         total += calculate_ap(0, Ain_v, S, P); // root is always 0
@@ -410,7 +412,7 @@ double update(map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P
     return total;
 }
 
-set<pair<int, int> > get_pi(DiGraph G, map<int, set<pair<int, int> > > Ain_edges, set<int> S) {
+set<pair<int, int> > get_pi(DiGraph G, unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S) {
     set<pair<int, int> > Pi;
     out_edge_iter ei, e_end;
     in_edge_iter qi, q_end;
@@ -433,10 +435,64 @@ set<pair<int, int> > get_pi(DiGraph G, map<int, set<pair<int, int> > > Ain_edges
     return Pi;
 }
 
-set<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set<int> S, map<int,
-        vector<int> > Nf, map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K) {
+vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set<int> S, unordered_map<int,vector<int> > Nf,
+                           unordered_map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, double theta) {
 
 
+    vector<int> F;
+    unordered_map<int, set<pair<int, int> > > Ain_edges;
+    set<pair<int, int> > Pi;
+    int max_feature;
+    double max_spread, spread;
+    unordered_map<int, bool> selected;
+    bool intersected;
+    edge_prob changed;
+    clock_t begin, finish;
+
+    Ain_edges = explore(G, P, S, theta);
+    Pi = get_pi(G, Ain_edges, S);
+
+    while (F.size() < K) {
+        cout << F.size() << ": ";
+        fflush(stdout);
+        max_feature = -1;
+        max_spread = -1;
+        for (auto &f: Phi) {
+            cout << f << " ";
+            fflush(stdout);
+            if (not selected[f]) {
+                intersected = false;
+                for (auto &edge: Ef[f]) {
+                    if (Pi.find(edge) != Pi.end()) {
+                        intersected = true;
+                        break;
+                    }
+                }
+                begin = clock();
+                if (intersected) {
+                    F.push_back(f);
+                    changed = increase_probabilities(G, B, Q, Nf, F, Ef[f], P);
+                    Ain_edges = explore(G, P, S, theta);
+                    begin = clock();
+                    spread = update(Ain_edges, S, P);
+                    finish = clock();
+                    cout << "Time to update: " << (double) (finish - begin)/(CLOCKS_PER_SEC) << endl;
+                    if (spread > max_spread) {
+                        max_spread = spread;
+                        max_feature = f;
+                    }
+                    decrease_probabilities(changed, P);
+                    F.pop_back();
+                }
+            }
+        }
+        cout << endl;
+        F.push_back(max_feature);
+        selected[max_feature] = true;
+//        printf("f = %i; spread = %.2f\n", max_feature, max_spread);
+        increase_probabilities(G, B, Q, Nf, F, Ef[max_feature], P);
+    }
+    return F;
 }
 
 
@@ -449,14 +505,14 @@ int main(int argc, char* argv[]) {
         const int K = atoi(argv[4]);         // number of features
     }
 
-    map<int, vector<int> > Nf;
-    map<int, vector<pair<int, int> > > Ef;
+    unordered_map<int, vector<int> > Nf;
+    unordered_map<int, vector<pair<int, int> > > Ef;
     edge_prob B, Q, P;
-    map<int, set<int> > groups;
+    unordered_map<int, set<int> > groups;
     vector<int> F;
     set<int> S;
     int I, K;
-    map<int, double> influence;
+    unordered_map<int, double> influence;
     double theta;
     in_edge_iter qi, q_end;
 
@@ -496,13 +552,20 @@ int main(int argc, char* argv[]) {
 //        printf("%i %f\n", item.first, item.second);
 //    }
 
-    map<int, set<pair<int, int> > > Ain_edges;
+    unordered_map<int, set<pair<int, int> > > Ain_edges;
+    clock_t begin, finish;
+    begin = clock();
     Ain_edges= explore(G, P, S, theta);
-    set<pair<int, int> > Pi = get_pi(G, Ain_edges, S);
-    cout << "|Pi| = " << Pi.size() << endl;
+    begin = clock();
     double total = update(Ain_edges, S, P);
-    cout << total << endl;
+    finish = clock();
+    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << endl;
 
+//    cout << "Start explore-update" << endl;
+//    F = explore_update(G, B, Q, P, S, Nf, Ef, Phi, K, theta);
+//    for (auto &f: F)
+//        cout << f << " ";
+//    cout << endl;
 
     return 0;
 }
