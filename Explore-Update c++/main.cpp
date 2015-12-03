@@ -23,6 +23,7 @@ typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
 typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
 typedef boost::graph_traits<DiGraph>::in_edge_iterator in_edge_iter;
 typedef map<pair<int, int>, double> edge_prob;
+typedef map<edge_t, double> prob_e;
 
 void print_vertices(DiGraph G) {
     pair<vertex_iter, vertex_iter> vp;
@@ -144,7 +145,7 @@ void read_probabilities(string prob_filename, edge_prob &P) {
 }
 
 
-void read_groups(string group_filename, unordered_map<int, set<int> > &groups) {
+void read_groups(string group_filename, unordered_map<int, unordered_set<int> > &groups) {
     ifstream infile(group_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -154,7 +155,7 @@ void read_groups(string group_filename, unordered_map<int, set<int> > &groups) {
 
     while (getline(infile, line)) {
         boost::split(line_splitted, line, boost::is_any_of(" "));
-        set<int> nodes;
+        unordered_set<int> nodes;
         for (int i = 1; i < line_splitted.size(); ++i) {
             nodes.insert(stoi(line_splitted[i]));
         }
@@ -286,7 +287,7 @@ pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, edge_prob B, e
     return make_pair(F, influence);
 }
 
-unordered_map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, set<int> S, double theta) {
+unordered_map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, unordered_set<int> S, double theta) {
 
     double max_num = numeric_limits<double>::max();
     double min_dist;
@@ -386,7 +387,7 @@ SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v, int root) {
     return Ain_v;
 }
 
-double calculate_ap(vertex_t u, SubGraph Ain_v, set<int> S, edge_prob P) {
+double calculate_ap(vertex_t u, SubGraph Ain_v, unordered_set<int> S, edge_prob P) {
     if (S.find(Ain_v[u].label) != S.end())
         return 1;
     else {
@@ -403,23 +404,23 @@ double calculate_ap(vertex_t u, SubGraph Ain_v, set<int> S, edge_prob P) {
     }
 }
 
-double calculate_ap2(SubGraph Ain_v, set<int> S, edge_prob P) {
+double calculate_ap2(SubGraph Ain_v, unordered_set<int> S, edge_prob P) {
     vector<vertex_t> topology;
-    topological_sort(Ain_v, back_inserter(topology));
     unordered_map<vertex_t, double> ap;
-    double p, prod=1;
+    double prod;
     in_edge_iter qi, q_end;
-    vertex_t node;
 
+    topological_sort(Ain_v, back_inserter(topology));
+
+    clock_t start = clock();
     for (vector<vertex_t>::reverse_iterator ii=topology.rbegin(); ii!=topology.rend(); ++ii) {
-        if (S.find(Ain_v[*ii].label) != S.end())
+        if (S.find(Ain_v[*ii].label) != S.end()) {
             ap[*ii] = 1;
+        }
         else {
             prod = 1;
             for (boost::tie(qi, q_end)=in_edges(*ii, Ain_v); qi!=q_end; ++qi) {
-                node = source(*qi, Ain_v);
-                p = P[make_pair(Ain_v[node].label, Ain_v[*ii].label)];
-                prod *= (1 - ap[node]*p);
+                prod *= (1 - ap[source(*qi, Ain_v)]*P[make_pair(Ain_v[source(*qi, Ain_v)].label, Ain_v[*ii].label)]);
             }
             ap[*ii] = 1 - prod;
         }
@@ -427,18 +428,16 @@ double calculate_ap2(SubGraph Ain_v, set<int> S, edge_prob P) {
     return 1 - prod;
 }
 
-double update(unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S, edge_prob P) {
+double update(unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set<int> S, edge_prob P) {
     double total = 0, path_prob;
     unordered_set<int> mip;
     bool pathed;
-    clock_t begin, finish;
-    double timed = 0;
     for (auto &item: Ain_edges) {
         pathed = true;
         path_prob = 1;
 //      optimization for simple paths
         set<pair<int, int> > edges = item.second;
-        for (auto &e: edges) {
+        for (const auto &e: edges) {
             if (mip.find(e.second) != mip.end()) {
                 pathed = false;
                 break;
@@ -453,16 +452,13 @@ double update(unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S, e
         }
         else {
             SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
-            begin = clock();
             total += calculate_ap2(Ain_v, S, P);
-            timed += (double) (clock() - begin)/(CLOCKS_PER_SEC);
         }
     }
-    cout << "Time spent on making graph is " << timed << endl;
     return total;
 }
 
-set<pair<int, int> > get_pi(DiGraph G, unordered_map<int, set<pair<int, int> > > Ain_edges, set<int> S) {
+set<pair<int, int> > get_pi(DiGraph G, unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set<int> S) {
     set<pair<int, int> > Pi;
     out_edge_iter ei, e_end;
     in_edge_iter qi, q_end;
@@ -485,7 +481,7 @@ set<pair<int, int> > get_pi(DiGraph G, unordered_map<int, set<pair<int, int> > >
     return Pi;
 }
 
-vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set<int> S, unordered_map<int,vector<int> > Nf,
+vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, unordered_set<int> S, unordered_map<int,vector<int> > Nf,
                            unordered_map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, double theta) {
 
 
@@ -497,6 +493,7 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set
     unordered_map<int, bool> selected;
     bool intersected;
     edge_prob changed;
+    int omissions = 0;
     clock_t begin, finish;
 
     Ain_edges = explore(G, P, S, theta);
@@ -504,7 +501,6 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set
 
     while (F.size() < K) {
         cout << F.size() << ": ";
-        fflush(stdout);
         max_feature = -1;
         max_spread = -1;
         for (auto &f: Phi) {
@@ -518,15 +514,12 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set
                         break;
                     }
                 }
-                begin = clock();
                 if (intersected) {
                     F.push_back(f);
                     changed = increase_probabilities(G, B, Q, Nf, F, Ef[f], P);
                     Ain_edges = explore(G, P, S, theta);
                     begin = clock();
                     spread = update(Ain_edges, S, P);
-                    finish = clock();
-                    cout << "Time to update: " << (double) (finish - begin)/(CLOCKS_PER_SEC) << endl;
                     if (spread > max_spread) {
                         max_spread = spread;
                         max_feature = f;
@@ -534,14 +527,17 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, set
                     decrease_probabilities(changed, P);
                     F.pop_back();
                 }
+                else {
+                    ++omissions;
+                }
             }
         }
         cout << endl;
         F.push_back(max_feature);
         selected[max_feature] = true;
-//        printf("f = %i; spread = %.2f\n", max_feature, max_spread);
         increase_probabilities(G, B, Q, Nf, F, Ef[max_feature], P);
     }
+    cout << "Total number of omissions: " << omissions << endl;
     return F;
 }
 
@@ -558,9 +554,9 @@ int main(int argc, char* argv[]) {
     unordered_map<int, vector<int> > Nf;
     unordered_map<int, vector<pair<int, int> > > Ef;
     edge_prob B, Q, P;
-    unordered_map<int, set<int> > groups;
+    unordered_map<int, unordered_set<int> > groups;
     vector<int> F;
-    set<int> S;
+    unordered_set<int> S;
     int I, K;
     unordered_map<int, double> influence;
     double theta;
@@ -602,10 +598,10 @@ int main(int argc, char* argv[]) {
 //        printf("%i %f\n", item.first, item.second);
 //    }
 
-    unordered_map<int, set<pair<int, int> > > Ain_edges;
-    clock_t begin, finish;
-    begin = clock();
-    Ain_edges = explore(G, P, S, theta);
+//    unordered_map<int, set<pair<int, int> > > Ain_edges;
+//    clock_t begin, finish;
+//    begin = clock();
+//    Ain_edges = explore(G, P, S, theta);
 //    for (auto &item: Ain_edges) {
 //        cout << item.first << "-->";
 //        for (auto &e: item.second) {
@@ -615,13 +611,17 @@ int main(int argc, char* argv[]) {
 //    }
 
 
-    begin = clock();
-    double total = update(Ain_edges, S, P);
-    finish = clock();
-    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
+
+//    begin = clock();
+//    double total = update(Ain_edges, S, P);
+//    finish = clock();
+//    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
 
 //    cout << "Start explore-update" << endl;
+//    clock_t start;
+//    start = clock();
 //    F = explore_update(G, B, Q, P, S, Nf, Ef, Phi, K, theta);
+//    cout << "Time Explore-Update: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
 //    for (auto &f: F)
 //        cout << f << " ";
 //    cout << endl;
