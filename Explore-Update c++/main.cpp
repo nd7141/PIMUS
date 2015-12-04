@@ -173,8 +173,6 @@ edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, unordered_
     for (auto &edge: E) {
         changed[edge] = P[edge];
         q = Q[edge]; b = B[edge];
-//        find intersection
-//        solution found here: http://stackoverflow.com/a/24337598/2069858
         target = edge.second;
         F_target = Nf[target];
         sort(F_target.begin(), F_target.end());
@@ -394,6 +392,7 @@ double calculate_ap(vertex_t u, SubGraph Ain_v, unordered_set<int> S, edge_prob 
         double prod = 1, ap_node, p;
         in_edge_iter qi, q_end;
         vertex_t node;
+        clock_t start, finish;
         for (boost::tie(qi, q_end)=in_edges(u, Ain_v); qi!=q_end; ++qi) {
             node = source(*qi, Ain_v);
             ap_node = calculate_ap(node, Ain_v, S, P);
@@ -459,7 +458,7 @@ double update(unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set
     for (auto &item: Ain_edges) {
         pathed = true;
         path_prob = 1;
-//      optimization for simple paths
+//      optimization
         set<pair<int, int> > edges = item.second;
         for (const auto &e: edges) {
             if (mip.find(e.second) != mip.end()) {
@@ -476,9 +475,7 @@ double update(unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set
         }
         else {
             SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
-            total += calculate_ap2(Ain_v, S, P);
-//            total += calculate_ap3(Ain_edges[item.first], S, P, item.first, ap_values);
-//            ap_values.clear();
+            total += calculate_ap(0, Ain_v, S, P);
         }
     }
     return total;
@@ -544,7 +541,6 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, uno
                     F.push_back(f);
                     changed = increase_probabilities(G, B, Q, Nf, F, Ef[f], P);
                     Ain_edges = explore(G, P, S, theta);
-                    begin = clock();
                     spread = update(Ain_edges, S, P);
                     if (spread > max_spread) {
                         max_spread = spread;
@@ -567,6 +563,24 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, uno
     return F;
 }
 
+vector<int> top_edges(unordered_map<int, vector<pair<int, int> > > Ef, int K) {
+
+    vector<pair<int, int> > tuples;
+    int len;
+    for (auto &item: Ef) {
+        len = item.second.size();
+        tuples.push_back(make_pair(item.first, len));
+    }
+    sort(tuples.begin(), tuples.end(), [](const pair<int,int> &left, const pair<int,int> &right) {
+        return left.second > right.second;
+    });
+    vector<int> F;
+    for (auto &t: tuples) {
+        F.push_back(t.first);
+        if (F.size() == K)
+            return F;
+    }
+}
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
@@ -624,14 +638,14 @@ int main(int argc, char* argv[]) {
 //        printf("%i %f\n", item.first, item.second);
 //    }
 
-    unordered_map<int, set<pair<int, int> > > Ain_edges;
-    clock_t begin, finish;
-    begin = clock();
-    Ain_edges = explore(G, P, S, theta);
-    begin = clock();
-    double total = update(Ain_edges, S, P);
-    finish = clock();
-    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
+//    unordered_map<int, set<pair<int, int> > > Ain_edges;
+//    clock_t begin, finish;
+//    begin = clock();
+//    Ain_edges = explore(G, P, S, theta);
+//    begin = clock();
+//    double total = update(Ain_edges, S, P);
+//    finish = clock();
+//    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
 
 //    cout << "Start explore-update" << endl;
 //    clock_t start;
@@ -641,6 +655,14 @@ int main(int argc, char* argv[]) {
 //    for (auto &f: F)
 //        cout << f << " ";
 //    cout << endl;
+
+    cout << "Start Top-Edges..." << endl;
+
+    clock_t start;
+    F = top_edges(Ef, K);
+    cout << "Spent time: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
+    for (auto &f: F)
+        cout << f << " ";
 
     return 0;
 }
