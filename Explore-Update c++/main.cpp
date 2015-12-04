@@ -22,7 +22,7 @@ typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
 typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
 typedef boost::graph_traits<DiGraph>::in_edge_iterator in_edge_iter;
-//typedef map<pair<int, int>, double> edge_prob;
+typedef map<pair<int, int>, double> edge_prob;
 typedef map<edge_t, double> prob_e;
 
 void print_vertices(DiGraph G) {
@@ -103,12 +103,13 @@ DiGraph read_graph(string graph_filename) {
     return G;
 }
 
-void read_features(string feature_filename, DiGraph G, unordered_map<int, vector<int> > &Nf, unordered_map<int, vector<edge_t> > &Ef) {
+void read_features(string feature_filename, DiGraph G, unordered_map<int, vector<int> > &Nf, unordered_map<int, vector<pair<int, int> > > &Ef) {
 
     string line;
     vector<string> line_splitted;
     int u, f;
     in_edge_iter ei, e_end;
+
 
     ifstream infile(feature_filename);
     if (infile==NULL){
@@ -124,14 +125,14 @@ void read_features(string feature_filename, DiGraph G, unordered_map<int, vector
         }
         for (auto & feat: u_features) {
             for (boost::tie(ei, e_end) = in_edges(u, G); ei!=e_end; ++ei) {
-                Ef[feat].push_back(*ei);
+                Ef[feat].push_back(make_pair(source(*ei, G), target(*ei, G)));
             }
         }
         Nf[u] = u_features;
     }
 }
 
-void read_probabilities(string prob_filename, prob_e &P, DiGraph G) {
+void read_probabilities(string prob_filename, edge_prob &P) {
     ifstream infile(prob_filename);
     if (infile==NULL){
         cout << "Unable to open the input file\n";
@@ -139,7 +140,7 @@ void read_probabilities(string prob_filename, prob_e &P, DiGraph G) {
     int u, v;
     double p;
     while (infile >> u >> v >> p) {
-        P[boost::edge(u, v, G).first] = p;
+        P[make_pair(u, v)] = p;
     }
 }
 
@@ -162,11 +163,11 @@ void read_groups(string group_filename, unordered_map<int, unordered_set<int> > 
     }
 }
 
-prob_e increase_probabilities(DiGraph G, prob_e B, prob_e Q, unordered_map<int, vector<int> > Nf, vector<int> F,
-                                 vector<edge_t> E, prob_e &P) {
-    prob_e changed;
+edge_prob increase_probabilities(DiGraph G, edge_prob B, edge_prob Q, unordered_map<int, vector<int> > Nf, vector<int> F,
+                                 vector<pair<int, int> > E, edge_prob &P) {
+    edge_prob changed;
     double q,b,h;
-    int t;
+    int target;
     double intersect;
     vector<int> F_target;
     for (auto &edge: E) {
@@ -174,8 +175,8 @@ prob_e increase_probabilities(DiGraph G, prob_e B, prob_e Q, unordered_map<int, 
         q = Q[edge]; b = B[edge];
 //        find intersection
 //        solution found here: http://stackoverflow.com/a/24337598/2069858
-        t = target(edge, G);
-        F_target = Nf[t];
+        target = edge.second;
+        F_target = Nf[target];
         sort(F_target.begin(), F_target.end());
         sort(F.begin(), F.end());
         unordered_set<int> s(F_target.begin(), F_target.end());
@@ -186,19 +187,21 @@ prob_e increase_probabilities(DiGraph G, prob_e B, prob_e Q, unordered_map<int, 
     return changed;
 }
 
-void decrease_probabilities(prob_e changed, prob_e &P) {
+void decrease_probabilities(edge_prob changed, edge_prob &P) {
     for (auto &item: changed) {
-        P[item.first] = item.second;
+        pair<int, int> edge = item.first;
+        double p = item.second;
+        P[edge] = p;
     }
 }
 
-double calculate_spread (DiGraph G, prob_e B, prob_e Q, unordered_map<int, vector<int> > Nf, set<int> S,
-                        vector<int> F, unordered_map<int, vector<edge_t> > Ef, int I) {
+double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, unordered_map<int, vector<int> > Nf, set<int> S,
+                        vector<int> F, unordered_map<int, vector<pair<int, int> > > Ef, int I) {
 
-    prob_e Prob;
+    edge_prob Prob;
     Prob.insert(B.begin(), B.end());
 
-    vector<edge_t> E;
+    vector<pair<int, int> > E;
     for (int i =0; i<F.size(); ++i) {
         for (int j=0; j < Ef[F[i]].size(); ++j) {
             E.push_back(Ef[F[i]][j]);
@@ -229,7 +232,7 @@ double calculate_spread (DiGraph G, prob_e B, prob_e Q, unordered_map<int, vecto
             for (boost::tie(ei, e_end) = out_edges(u, G); ei!=e_end; ++ei) {
                 v = target(*ei, G);
                 if (not activated[v]) {
-                    p = Prob[boost::edge(u,v,G).first];
+                    p = Prob[make_pair(u, v)];
                     double r = ((double) rand() / (RAND_MAX));
                     if (r < p) {
                         activated[v] = true;
@@ -245,13 +248,13 @@ double calculate_spread (DiGraph G, prob_e B, prob_e Q, unordered_map<int, vecto
     return spread/I;
 }
 
-pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, prob_e B, prob_e Q, set<int> S, unordered_map<int,
-        vector<int> > Nf, unordered_map<int, vector<edge_t> > Ef, vector<int> Phi, int K, int I) {
+pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, set<int> S, unordered_map<int,
+        vector<int> > Nf, unordered_map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
 
     vector<int> F;
-    prob_e P;
+    edge_prob P;
     unordered_map<int, bool> selected;
-    prob_e changed;
+    edge_prob changed;
     double spread, max_spread;
     int max_feature;
     unordered_map<int, double> influence;
@@ -284,38 +287,27 @@ pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, prob_e B, prob
     return make_pair(F, influence);
 }
 
-bool less_edge(DiGraph G, edge_t edge1, edge_t edge2) {
-    int u1 = source(edge1, G), v1 = target(edge1, G),
-            u2 = source(edge2, G), v2 = target(edge2, G);
-    if (u1 < u2 or (u1 == u2 and v1 < v2))
-        return true;
-    return false;
-
-}
-
-unordered_map<int, set<edge_t> > explore(DiGraph G, prob_e P, unordered_set<int> S, double theta) {
+unordered_map<int, set<pair<int, int> > > explore(DiGraph G, edge_prob P, unordered_set<int> S, double theta) {
 
     double max_num = numeric_limits<double>::max();
     double min_dist;
-    bool b;
-    edge_t min_edge, mip_edge;
+    pair<int, int> min_edge, mip_edge;
     pair<DiGraph::edge_descriptor, bool> edge_insertion;
     int V = num_vertices(G);
-    map<edge_t, double> edge_weights;
+    map<pair<int, int>, double> edge_weights;
     out_edge_iter ei, e_end;
     in_edge_iter qi, q_end;
     unordered_map<int, double> dist;
-    set<edge_t> crossing_edges;
-    unordered_map<int, vector<edge_t> > MIPs;
-    unordered_map<int, set<edge_t> > Ain_edges;
+    set<pair<int, int> > crossing_edges;
+    unordered_map<int, vector<pair<int, int> > > MIPs;
+    unordered_map<int, set<pair<int, int> > > Ain_edges;
 
-    cout << "nodes:" << endl;
+
     for (auto &v: S) {
-        cout << v << endl;
         MIPs[v] = {};
         dist[v] = 0;
         for (boost::tie(ei, e_end) = out_edges(v, G); ei!=e_end; ++ei) {
-            crossing_edges.insert(*ei);
+            crossing_edges.insert(make_pair(source(*ei, G), target(*ei, G)));
         }
 
         while (true) {
@@ -323,34 +315,33 @@ unordered_map<int, set<edge_t> > explore(DiGraph G, prob_e P, unordered_set<int>
                 break;
 
             min_dist = max_num;
-            boost::tie(min_edge, b) = boost::edge(V+1, V+1, G);
+            min_edge = make_pair(V+1, V+1);
 
             for (auto &edge: crossing_edges) {
                 if (edge_weights.find(edge) == edge_weights.end()) {
                     edge_weights[edge] = -log(P[edge]);
                 }
-
-                if (edge_weights[edge] + dist[source(edge, G)] < min_dist or
-                        (edge_weights[edge] + dist[source(edge, G)] == min_dist and less_edge(G, edge, min_edge))) {
-                    min_dist = edge_weights[edge] + dist[source(edge, G)];
+                if (edge_weights[edge] + dist[edge.first] < min_dist or
+                        (edge_weights[edge] + dist[edge.first] == min_dist and edge <= min_edge)) {
+                    min_dist = edge_weights[edge] + dist[edge.first];
                     min_edge = edge;
                 }
             }
             if (min_dist <= -log(theta)) {
-                dist[target(min_edge, G)] = min_dist;
-                MIPs[target(min_edge, G)] = MIPs[source(min_edge, G)];
-                MIPs[target(min_edge, G)].push_back(min_edge);
-                for (auto &edge: MIPs[target(min_edge, G)]) {
-                    Ain_edges[target(min_edge, G)].insert(edge);
+                dist[min_edge.second] = min_dist;
+                MIPs[min_edge.second] = MIPs[min_edge.first];
+                MIPs[min_edge.second].push_back(min_edge);
+                for (auto &edge: MIPs[min_edge.second]) {
+                    Ain_edges[min_edge.second].insert(edge);
                 }
 
-                for (boost::tie(qi, q_end) = in_edges(target(min_edge, G), G); qi!=q_end; ++qi) {
-                    crossing_edges.erase(*qi);
+                for (boost::tie(qi, q_end) = in_edges(min_edge.second, G); qi!=q_end; ++qi) {
+                    crossing_edges.erase(make_pair(source(*qi, G), target(*qi, G)));
                 }
-                for (boost::tie(ei, e_end) = out_edges(target(min_edge, G), G); ei!=e_end; ++ei) {
+                for (boost::tie(ei, e_end) = out_edges(min_edge.second, G); ei!=e_end; ++ei) {
                     int end2 = target(*ei, G);
                     if (MIPs.find(end2) == MIPs.end()) {
-                        crossing_edges.insert(*ei);
+                        crossing_edges.insert(make_pair(min_edge.second, end2));
                     }
                 }
             }
@@ -364,7 +355,7 @@ unordered_map<int, set<edge_t> > explore(DiGraph G, prob_e P, unordered_set<int>
     return Ain_edges;
 }
 
-SubGraph make_subgraph(DiGraph G, set<edge_t> Ain_edges_v, int root) {
+SubGraph make_subgraph(set<pair<int, int> > Ain_edges_v, int root) {
     SubGraph Ain_v;
     int u, v, count=0;
     unordered_map<int, int> unordered_mapped;
@@ -376,8 +367,7 @@ SubGraph make_subgraph(DiGraph G, set<edge_t> Ain_edges_v, int root) {
     Ain_v[vertex].label = root;
     count++;
     for (auto &edge: Ain_edges_v) {
-        u = source(edge, G);
-        v = target(edge, G);
+        u = edge.first; v = edge.second;
         if (unordered_mapped.find(u) == unordered_mapped.end()) {
             unordered_mapped[u] = count;
             vertex = boost::add_vertex(Ain_v);
@@ -397,28 +387,24 @@ SubGraph make_subgraph(DiGraph G, set<edge_t> Ain_edges_v, int root) {
     return Ain_v;
 }
 
-double calculate_ap(DiGraph G, vertex_t u, SubGraph Ain_v, unordered_set<int> S, prob_e P) {
+double calculate_ap(vertex_t u, SubGraph Ain_v, unordered_set<int> S, edge_prob P) {
     if (S.find(Ain_v[u].label) != S.end())
         return 1;
     else {
         double prod = 1, ap_node, p;
         in_edge_iter qi, q_end;
         vertex_t node;
-        edge_t e;
-        bool b;
         for (boost::tie(qi, q_end)=in_edges(u, Ain_v); qi!=q_end; ++qi) {
             node = source(*qi, Ain_v);
-            ap_node = calculate_ap(G, node, Ain_v, S, P);
-//            p = P[make_pair(Ain_v[node].label, Ain_v[u].label)];
-            boost::tie(e, b) = boost::edge(Ain_v[node].label, Ain_v[u].label, G);
-            p = P[e];
+            ap_node = calculate_ap(node, Ain_v, S, P);
+            p = P[make_pair(Ain_v[node].label, Ain_v[u].label)];
             prod *= (1 - ap_node*p);
         }
         return 1 - prod;
     }
 }
 
-double calculate_ap2(DiGraph G, SubGraph Ain_v, unordered_set<int> S, prob_e P) {
+double calculate_ap2(SubGraph Ain_v, unordered_set<int> S, edge_prob P) {
     vector<vertex_t> topology;
     unordered_map<vertex_t, double> ap;
     double prod;
@@ -434,8 +420,7 @@ double calculate_ap2(DiGraph G, SubGraph Ain_v, unordered_set<int> S, prob_e P) 
         else {
             prod = 1;
             for (boost::tie(qi, q_end)=in_edges(*ii, Ain_v); qi!=q_end; ++qi) {
-                pair<edge_t, bool> edge_G = boost::edge(Ain_v[source(*qi, Ain_v)].label, Ain_v[*ii].label, G);
-                prod *= (1 - ap[source(*qi, Ain_v)]*P[edge_G.first]);
+                prod *= (1 - ap[source(*qi, Ain_v)]*P[make_pair(Ain_v[source(*qi, Ain_v)].label, Ain_v[*ii].label)]);
             }
             ap[*ii] = 1 - prod;
         }
@@ -443,23 +428,46 @@ double calculate_ap2(DiGraph G, SubGraph Ain_v, unordered_set<int> S, prob_e P) 
     return 1 - prod;
 }
 
-// TODO redo. Refactor Ain_edges
-double update(DiGraph G, unordered_map<int, set<edge_t> > Ain_edges, unordered_set<int> S, prob_e P) {
+double calculate_ap3(set<pair<int, int> >& Ain_edges_v, unordered_set<int> S, edge_prob P, int node, unordered_map<int, double> & ap_values) {
+    if (S.find(node) != S.end())
+        return 1;
+    else {
+        double prod = 1, ap_node;
+
+        for (auto &edge: Ain_edges_v) {
+            if (edge.second == node) {
+                if (ap_values.find(edge.first) != ap_values.end()) {
+                    ap_node = ap_values[edge.first];
+                }
+                else {
+                    ap_node = calculate_ap3(Ain_edges_v, S, P, edge.first, ap_values);
+                }
+                prod *= (1 - ap_node*P[edge]);
+                Ain_edges_v.erase(edge);
+            }
+        }
+        ap_values[node] = 1 - prod;
+        return 1 - prod;
+    }
+}
+
+double update(unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set<int> S, edge_prob P) {
     double total = 0, path_prob;
     unordered_set<int> mip;
     bool pathed;
+    unordered_map <int, double> ap_values;
     for (auto &item: Ain_edges) {
         pathed = true;
         path_prob = 1;
 //      optimization for simple paths
-        set<edge_t> edges = item.second;
+        set<pair<int, int> > edges = item.second;
         for (const auto &e: edges) {
-            if (mip.find(target(e, G)) != mip.end()) {
+            if (mip.find(e.second) != mip.end()) {
                 pathed = false;
                 break;
             }
             else {
-                mip.insert(target(e, G));
+                mip.insert(e.second);
                 path_prob *= P[e];
             }
         }
@@ -467,17 +475,20 @@ double update(DiGraph G, unordered_map<int, set<edge_t> > Ain_edges, unordered_s
             total += path_prob;
         }
         else {
-            SubGraph Ain_v = make_subgraph(G, Ain_edges[item.first], item.first);
-            total += calculate_ap2(G, Ain_v, S, P);
+            SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
+            total += calculate_ap2(Ain_v, S, P);
+//            total += calculate_ap3(Ain_edges[item.first], S, P, item.first, ap_values);
+//            ap_values.clear();
         }
     }
     return total;
 }
 
-set<edge_t> get_pi(DiGraph G, unordered_map<int, set<edge_t> > Ain_edges, unordered_set<int> S) {
-    set<edge_t> Pi;
+set<pair<int, int> > get_pi(DiGraph G, unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set<int> S) {
+    set<pair<int, int> > Pi;
     out_edge_iter ei, e_end;
     in_edge_iter qi, q_end;
+    vertex_iter vi, v_end;
     set<int> Pi_nodes;
 
     Pi_nodes.insert(S.begin(), S.end());
@@ -487,27 +498,27 @@ set<edge_t> get_pi(DiGraph G, unordered_map<int, set<edge_t> > Ain_edges, unorde
 
     for (auto &node: Pi_nodes) {
         for (boost::tie(ei, e_end) = out_edges(node, G); ei!=e_end; ++ei) {
-            Pi.insert(*ei);
+            Pi.insert(make_pair(source(*ei, G), target(*ei, G)));
         }
         for (boost::tie(qi, q_end) = in_edges(node, G); qi!=q_end; ++qi) {
-            Pi.insert(*qi);
+            Pi.insert(make_pair(source(*qi, G), target(*qi, G)));
         }
     }
     return Pi;
 }
 
-vector<int> explore_update(DiGraph G, prob_e B, prob_e Q, prob_e P, unordered_set<int> S, unordered_map<int,vector<int> > Nf,
-                           unordered_map<int, vector<edge_t>> Ef, vector<int> Phi, int K, double theta) {
+vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, unordered_set<int> S, unordered_map<int,vector<int> > Nf,
+                           unordered_map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, double theta) {
 
 
     vector<int> F;
-    unordered_map<int, set<edge_t> > Ain_edges;
-    set<edge_t> Pi;
+    unordered_map<int, set<pair<int, int> > > Ain_edges;
+    set<pair<int, int> > Pi;
     int max_feature;
     double max_spread, spread;
     unordered_map<int, bool> selected;
     bool intersected;
-    prob_e changed;
+    edge_prob changed;
     int omissions = 0;
     clock_t begin, finish;
 
@@ -534,7 +545,7 @@ vector<int> explore_update(DiGraph G, prob_e B, prob_e Q, prob_e P, unordered_se
                     changed = increase_probabilities(G, B, Q, Nf, F, Ef[f], P);
                     Ain_edges = explore(G, P, S, theta);
                     begin = clock();
-                    spread = update(G, Ain_edges, S, P);
+                    spread = update(Ain_edges, S, P);
                     if (spread > max_spread) {
                         max_spread = spread;
                         max_feature = f;
@@ -567,8 +578,8 @@ int main(int argc, char* argv[]) {
     }
 
     unordered_map<int, vector<int> > Nf;
-    unordered_map<int, vector<edge_t> > Ef;
-    prob_e B, Q, P;
+    unordered_map<int, vector<pair<int, int> > > Ef;
+    edge_prob B, Q, P;
     unordered_map<int, unordered_set<int> > groups;
     vector<int> F;
     unordered_set<int> S;
@@ -579,9 +590,9 @@ int main(int argc, char* argv[]) {
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
-    read_probabilities("datasets/gnutella_mv.txt", B, G);
-    read_probabilities("datasets/gnutella_mv.txt", Q, G);
-    read_probabilities("datasets/gnutella_mv.txt", P, G);
+    read_probabilities("datasets/gnutella_mv.txt", B);
+    read_probabilities("datasets/gnutella_mv.txt", Q);
+    read_probabilities("datasets/gnutella_mv.txt", P);
     read_groups("datasets/gnutella_com.txt", groups);
 
     vector<int> Phi;
@@ -613,13 +624,12 @@ int main(int argc, char* argv[]) {
 //        printf("%i %f\n", item.first, item.second);
 //    }
 
-    unordered_map<int, set<edge_t> > Ain_edges;
+    unordered_map<int, set<pair<int, int> > > Ain_edges;
     clock_t begin, finish;
     begin = clock();
     Ain_edges = explore(G, P, S, theta);
-    cout << Ain_edges.size() << endl;
     begin = clock();
-    double total = update(G, Ain_edges, S, P);
+    double total = update(Ain_edges, S, P);
     finish = clock();
     cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
 
