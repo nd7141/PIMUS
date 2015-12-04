@@ -582,6 +582,30 @@ vector<int> top_edges(unordered_map<int, vector<pair<int, int> > > Ef, int K) {
     }
 }
 
+vector<int> top_nodes(unordered_map<int, vector<int> > Nf, int K) {
+    vector<int> F;
+    unordered_map<int, int> degrees;
+    vector<int> nodes;vector<pair<int, int> > tuples;
+    int len;
+
+    for (auto &item: Nf) {
+        for (int i=0; i<item.second.size(); ++i) {
+            ++degrees[item.second[i]];
+        }
+    }
+    for (auto &item: degrees) {
+        tuples.push_back(item);
+    }
+    sort(tuples.begin(), tuples.end(), [](const pair<int,int> &left, const pair<int,int> &right) {
+        return left.second > right.second;
+    });
+    for (auto &t: tuples) {
+        F.push_back(t.first);
+        if (F.size() == K)
+            return F;
+    }
+}
+
 int main(int argc, char* argv[]) {
     srand(time(NULL));
     // read parameters from command-line
@@ -656,10 +680,16 @@ int main(int argc, char* argv[]) {
 //        cout << f << " ";
 //    cout << endl;
 
-    cout << "Start Top-Edges..." << endl;
+//    cout << "Start Top-Edges..." << endl;
+//    clock_t start;
+//    F = top_edges(Ef, K);
+//    cout << "Spent time: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
+//    for (auto &f: F)
+//        cout << f << " ";
 
+    cout << "Start Top-Nodes..." << endl;
     clock_t start;
-    F = top_edges(Ef, K);
+    F = top_nodes(Nf, K);
     cout << "Spent time: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
     for (auto &f: F)
         cout << f << " ";
