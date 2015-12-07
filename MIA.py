@@ -256,6 +256,21 @@ def calculate_ap(u, Ain_v, S, P):
             prod *= (1 - ap_w*float(P.loc[e]))
         return 1 - prod
 
+def calculate_ap2(Ain, S, P):
+
+    top_sort = nx.algorithms.topological_sort(Ain)
+
+    ap = dict()
+    for u in top_sort:
+        if u in S:
+            ap[u] = 1
+        else:
+            prod = 1
+            for e in Ain.in_edges(u):
+                prod *= (1 - ap[e[0]]*float(P.loc[e]))
+            ap[u] = 1 - prod
+    return 1 - prod
+
 def update(Ain, S, P):
     """
     Returns influence spread in IC model from S using activation probabilities in in-arborescences.
@@ -264,6 +279,7 @@ def update(Ain, S, P):
     :param P: dataframe of edge probabilities
     :return:
     """
+    # return sum([calculate_ap(u, Ain[u], S, P) for u in Ain])
     total = 0
     mip = set()
     for u in Ain:
@@ -279,7 +295,7 @@ def update(Ain, S, P):
         if pathed:
             total += path_prob
         else:
-            total += calculate_ap(u, Ain[u], S, P)
+            total += calculate_ap2(Ain[u], S, P)
     return total
 
 def get_pi(G, Ain, S):
