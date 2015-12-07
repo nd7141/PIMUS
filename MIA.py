@@ -134,6 +134,26 @@ def calculate_MC_spread(G, S, P, I):
         spread += len(T)
     return spread/I
 
+def calculate_spread(G, B, Q, S, F, Ef, I):
+    """
+    Calculate spread for given feature set F.
+    :param G: networkx graph
+    :param B: dataframe base probabilities
+    :param Q: dataframe product probabilities
+    :param S: list of seed set
+    :param F: list of selected features
+    :param Ef: dictionary of feature to edges
+    :param I: integer number of MC calculations
+    :return: float average number of influenced nodes
+    """
+    P = B.copy()
+    E = []
+    for f in F:
+        E.extend(Ef[f])
+    increase_probabilities(G, B, Q, F, E, P)
+
+    return calculate_MC_spread(G, S, P, I)
+
 def greedy(G, B, Q, Ef, S, Phi, K, I):
     """
     Return best features to PIMUS problem using greedy algorithm.
@@ -153,13 +173,16 @@ def greedy(G, B, Q, Ef, S, Phi, K, I):
     while len(F) < K:
         max_spread = -1
         print 'len(F):', len(F)
+        count = 0
         for f in Phi.difference(F):
+            print count
             changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
             spread = calculate_MC_spread(G, S, P, I)
             if spread > max_spread:
                 max_spread = spread
                 max_feature = f
             decrease_probabilities(changed, P)
+            count += 1
         print 'Selected', max_feature
         F.append(max_feature)
         influence[len(F)] = max_spread
@@ -177,10 +200,11 @@ def explore(G, P, S, theta):
     """
 
     Ain = dict()
+    edge_weights = dict()
+    min_edge = (float("inf"), float("inf"))
     for v in S:
         MIPs = {v: []} # shortest paths of edges to nodes from v
         crossing_edges = set([out_edge for out_edge in G.out_edges([v]) if out_edge[1] not in S + [v]])
-        edge_weights = dict()
         dist = {v: 0} # shortest paths from the root v
 
         while crossing_edges:
@@ -224,8 +248,6 @@ def calculate_ap(u, Ain_v, S, P):
     """
     if u in S:
         return 1
-    elif not Ain_v.in_edges(u):
-        return 0
     else:
         prod = 1
         for e in Ain_v.in_edges(u):
@@ -242,7 +264,23 @@ def update(Ain, S, P):
     :param P: dataframe of edge probabilities
     :return:
     """
-    return sum([calculate_ap(u, Ain[u], S, P) for u in Ain])
+    total = 0
+    mip = set()
+    for u in Ain:
+        path_prob = 1
+        pathed = True
+        for edge in Ain[u].edges():
+            if edge[1] in mip:
+                pathed = False
+                break
+            else:
+                mip.add(edge[1])
+                path_prob *= float(P.loc[edge])
+        if pathed:
+            total += path_prob
+        else:
+            total += calculate_ap(u, Ain[u], S, P)
+    return total
 
 def get_pi(G, Ain, S):
     """
@@ -282,10 +320,11 @@ def explore_update(G, B, Q, S, K, Ef, theta):
 
     count = 0
     while len(F) < K:
-        print '***************len(F): {}'.format(len(F))
+        print '***************len(F): {} --> '.format(len(F)),
         max_feature = None
         max_spread = -1
         for f in Phi.difference(F):
+            print f,
             e_intersection = Pi.intersection(Ef[f])
             # print 'intersection', len(e_intersection)
             if e_intersection:
@@ -297,7 +336,6 @@ def explore_update(G, B, Q, S, K, Ef, theta):
                     max_feature = f
                 decrease_probabilities(changed, P)
             else:
-                print 'Missing feature', f
                 count += 1
         if max_feature:
             F.append(max_feature)
@@ -366,364 +404,100 @@ def brute_force(G, B, Q, S, K, Ef, I):
             max_spread = spread
     return max_F, max_spread
 
-class CalcSpread(object):
-    def __init__(self, G, B, Q, S, Ef, I):
-        self.G = G
-        self.B = B
-        self.Q = Q
-        self.S = S
-        self.Ef = Ef
-        self.I = I
-    def c_spread(self, F):
-        return calculate_spread(G, B, Q, S, F, Ef, I)
-
-def calc_spread((idx, F)):
-    start = time.time()
-    spread = C.c_spread(F)
-    finish = time.time() - start
-    print idx, F, spread, finish
-    return F, spread
-
 def top_edges(Ef, K):
+    print map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:K])
     return map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:K])
 
 def top_nodes(Nf, K):
     return map(lambda (k, v): k, Counter(chain.from_iterable(Nf.values())).most_common(K))
+
+def test(Ain_v, P, S):
+    total = 1
+
+    top_sort = nx.algorithms.topological_sort(Ain_v)
+
+    for node in top_sort:
+        if node in S:
+            total *= 1
+        else:
+            for edge in Ain_v.in_edges(node):
+                total *= P.loc[edge]
+    return total
+
 
 if __name__ == "__main__":
 
     model = "mv"
     print model
 
-    G = read_graph('datasets/wv.txt')
-    Ef, Nf = add_graph_attributes(G, 'datasets/wikivote_mem.txt')
+    G = read_graph('datasets/gnutella.txt')
+    Ef, Nf = add_graph_attributes(G, 'datasets/gnutella_mem2.txt')
     Phi = set(Ef.keys())
 
-    B = read_probabilities('datasets/wikivote_{}.txt'.format(model))
-    Q = read_probabilities('datasets/wikivote_{}.txt'.format(model))
-
+    B = read_probabilities('datasets/gnutella_{}.txt'.format(model))
+    Q = read_probabilities('datasets/gnutella_{}.txt'.format(model))
+    P = read_probabilities('datasets/gnutella_{}.txt'.format(model))
     print 'Phi: {}'.format(len(Ef))
+    groups = read_groups('datasets/gnutella_com2.txt')
 
-    groups = read_groups('datasets/wikivote_com.txt')
-    #
-    # I = 1
-    # S = groups['9']
-    # print len(S), S
-    #
-    # for u in S:
-    #     edges = G.in_edges(u)
-    #     G.remove_edges_from(edges)
-    #
+    S = groups['2']
+    for node in S:
+        G.remove_edges_from(G.in_edges(node))
+    I = 10000
+    K = 51
+    theta = 1./40
 
-
-
-    # # greedy spread
-    # filename1 = "datasets/greedy/gnutella_greedy_range_{}.txt".format(model)
-    # filename2 = "datasets/greedy/gnutella_greedy_selected_{}.txt".format(model)
-    #
-    # with open(filename2) as f:
-    #     F = f.readlines()[0].split()
-    #
-    # print len(F), F
-    #
-    # with open(filename1, 'w') as f1:
-    #     for K in range(5, 15, 5):
-    #         spread = calculate_spread(G, B, Q, S, F[:K], Ef, I)
-    #         f1.write("{}\n".format(spread))
-
-
-
-    # experiment 3
-    # selected_groups = ['10', '26', '133', '75', '61', '135', '72', '73', '25']
-    #
-    # filename1 = "datasets/experiment3/gnutella_results_greedy_{}.txt".format(model)
-    # filename2 = "datasets/experiment3/gnutella_time_greedy_{}.txt".format(model)
-    #
-    # I = 500
-    # K = 50
-    # for gr in selected_groups:
-    #     S = groups[gr]
-    #
-    #     for u in S:
-    #         edges = G.in_edges(u)
-    #         G.remove_edges_from(edges)
-
-        # f1.write("{} ".format(len(S)))
-        # f2.write("{} ".format(len(S)))
-
-        # # explore-update
-        # start = time.time()
-        # F = explore_update(G, B, Q, S, K, Ef, 1./40)
-        # finish = time.time() - start
-        # f2.write("{} ".format(finish))
-        # print 'EU', sorted(F), time.time() - start
-        # start = time.time()
-        # eu_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-        # print 'EU spread:', eu_spread, time.time() - start
-        # f1.write("{} ".format(eu_spread))
-        #
-        # # top edges
-        # start = time.time()
-        # F = map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:K])
-        # finish = time.time() - start
-        # f2.write("{}\n".format(finish))
-        # print 'Top edges:', sorted(F), time.time() - start
-        # tope_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-        # print 'Top edges spread:', tope_spread
-        # f1.write("{}\n".format(tope_spread))
-
-        # greedy
-        # top edges
-        # start = time.time()
-        # F = greedy(G, B, Q, Ef, S, Phi, K, I)
-        # finish = time.time() - start
-        # # f2.write("{}\n".format(finish))
-        # print 'Greedy:', sorted(F), time.time() - start
-        # greedy_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-        # print 'Top edges spread:', greedy_spread
-        # # f1.write("{}\n".format(greedy_spread))
-        #
-        # with open(filename1, 'a') as f1, open(filename2, 'a') as f2:
-        #     f1.write("{} {}\n".format(len(S), greedy_spread))
-        #     f2.write("{} {}\n".format(len(S), finish))
-
-
-    # experiment 4
-
-    # S = groups['25']
-    # for u in S:
-    #     edges = G.in_edges(u)
-    #     G.remove_edges_from(edges)
-    #
-    # filename1 = "datasets/experiment4/gnutella_theta_spread.txt"
-    # filename2 = "datasets/experiment4/gnutella_theta_time.txt"
-    #
-    # I = 500
-    # K = 50
-    # for theta in [1./10, 1./20, 1./40, 1./80, 1./160, 1./320, 1./640, 1./1280]:
-    #     print 'theta=', theta
-    #     start = time.time()
-    #     F = explore_update(G, B, Q, S, K, Ef, theta)
-    #     finish = time.time() - start
-    #     with open(filename2, 'a') as f2:
-    #         f2.write("{}\n".format(finish))
-    #     eu_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-    #     with open(filename1, 'a') as f1:
-    #         f1.write("{}\n".format(eu_spread))
-
-    # experiment 5
-    filename1 = "datasets/experiment5/wikivote_time_{}.txt".format(model)
-    filename2 = "datasets/experiment5/wikivote_results_{}.txt".format(model)
-    filename3 = "datasets/experiment5/wikivote_results_greedy_{}.txt".format(model)
-
-    S = groups['9'] #todo change the number of a group
-    print '9:', len(S)
-    for u in S:
-        edges = G.in_edges(u)
-        G.remove_edges_from(edges)
-
-    K = 50
-    I = 100
+    total = 0
     start = time.time()
-    F, greedy_influence = greedy(G, B, Q, Ef, S, Phi, K, I)
+    Ain = explore(G, P, S, theta)
     finish = time.time()
-    print F, finish - start
-    with open(filename1, 'a') as f1:
-        f1.write("{} ".format(finish - start))
-    with open(filename3, 'a') as f3:
-        for size in range(5, 51, 5):
-            f3.write("{}\n".format(greedy_influence[size]))
-
+    total += finish - start
+    print finish - start
     start = time.time()
-    eu_selected = explore_update(G, B, Q, S, K, Ef, 1./40)
+    spread = update(Ain, S, P)
     finish = time.time()
-    with open(filename1, 'a') as f1:
-        f1.write("{} ".format(finish - start))
-
-    for K in range(5, 51, 5):
-        print 'K:', K
-        F = eu_selected[:K]
-        eu_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-        with open(filename2, 'a') as f2:
-            f2.write("{} ".format(eu_spread))
-
-        F = top_edges(Ef, K)
-        tope_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-        with open(filename2, 'a') as f2:
-            f2.write("{} ".format(tope_spread))
-
-        F = top_nodes(Nf, K)
-        topn_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-        with open(filename2, 'a') as f2:
-            f2.write("{}\n".format(topn_spread))
+    total += finish - start
+    print finish - start, spread
 
 
-    # K = 10
-    #
-    # L = 500
-    # dct = dict()
-    # with open("gnutella_mv_opt2_top.txt") as f:
-    #     for ix, line in enumerate(f):
-    #         d = line.split()
-    #         dct[tuple(sorted(d[1:]))] = (ix, float(d[0]))
-    #         if ix == L:
-    #             break
-
-    # C = CalcSpread(G, B, Q, S, Ef, I)
-    # pool = mp.Pool(4)
     # start = time.time()
-    # map_lst = pool.map(calc_spread, enumerate(dct))
-    # finish = time.time() - start
-    # print 'Total time to brute-force', finish
-    # sorted_maps = sorted(map_lst, key = lambda (_, s): s, reverse=True)
-    # print sorted_maps[:10]
-    # with open('gnutella_mv_opt2_top.txt', 'w') as f1:
-    #     for F, sp in sorted_maps:
-    #         f1.write("{} ".format(sp))
-    #         for f in F:
-    #             f1.write("{} ".format(f))
-    #         f1.write("\n")
+    # T = 0
+    # for node in Ain:
+    #     T += test(Ain[node], P, S)
+    # finish = time.time()
+    # print finish - start, float(T)
 
-    # dct3 = dict()
-    # for F in dct:
-    #     print F,
-    #     start = time.time()
-    #     spread = calculate_spread(G, B, Q, S, F, Ef, I)
-    #     print time.time() - start
-    #     dct3[F] = spread
-    #
-    # sorted_top = sorted(dct3.items(), key = lambda (k,v): v, reverse=True)
-    # with open("gnutella_mv_opt2_top.txt", "w") as f:
-    #     for F, sp in sorted_top:
-    #         f.write("{} {}\n".format(sp, " ".join(F)))
-
-    # dct2 = dict()
-    # with open("gnutella_mv_others.txt") as f:
-    #     for line in f:
-    #         d = line.split()
-    #         dct2[tuple(sorted(d[1:]))] = float(d[0])
-    #
-    # for k in dct2:
-    #     print k, dct[k]
-
-
-    # C = CalcSpread(G, B, Q, S, Ef, I)
-    # combs = combinations(Phi, K)
-    # pool = mp.Pool(4)
     # start = time.time()
-    # map_lst = pool.map(calc_spread, enumerate(combs))
-    # finish = time.time() - start
-    # print 'Total time to brute-force', finish
-    # sorted_maps = sorted(map_lst, key = lambda (_, s): s, reverse=True)
-    # print sorted_maps[:10]
-    # with open('gnutella_mv_opt2.txt', 'w') as f1:
-    #     for F, sp in sorted_maps:
-    #         f1.write("{} ".format(sp))
-    #         for f in F:
-    #             f1.write("{} ".format(f))
-    #         f1.write("\n")
-
-    # with open('datasets/gnutella_eu_selected2_wc.txt') as f:
-    #     selected_eu = f.readlines()[0].split()
+    # F = explore_update(G, B, Q, S, K, Ef, theta)
+    # finish = time.time()
+    # with open("datasets/experiment1_10000/{}/gnutella_time.txt".format(model), "w") as f:
+    #     f.write("{}\n".format(finish - start))
+    # spread = calculate_spread(G, B, Q, S, F, Ef, I)
+    # with open("datasets/experiment1_10000/{}/gnutella_spread.txt".format(model), "w") as f:
+    #     f.write("{}\n".format(spread))
+    # with open("datasets/experiment1_10000/{}/gnutella_eu_features.txt".format(model), "w") as f:
+    #     f.write("\n".join(F))
     #
-    # with open('datasets/gnutella_greedy_selected2_wc.txt') as f:
-    #     selected_greedy = f.readlines()[0].split()
-    #
-
-    # filename1 = "datasets/greedy/gnutella_greedy_selected_{}.txt".format(model)
-    # filename2 = "datasets/greedy/gnutella_greedy_time_{}.txt".format(model)
-    # filename3 = "datasets/greedy/gnutella_greedy_results_{}.txt".format(model)
-    #
-    # with open(filename1, 'w') as f1, open(filename2, 'w') as f2:
-    #     K = 15
-    #     start = time.time()
-    #     F = greedy(G, B, Q, Ef, S, Phi, K, I)
-    #     finish = time.time() - start
-    #     print 'Greedy:', F, finish
-    #
-    #     f1.write(" ".join(F))
-    #     f2.write("{}".format(finish))
-    #
-    # with open(filename3, 'w') as f1:
-    #     for K in range(5, 15, 5):
-    #         print K,
-    #         greedy_spread = calculate_spread(G, B, Q, S, F[:K], Ef, I)
-    #         print greedy_spread
-    #         f1.write("{}\n".format(greedy_spread))
-
-    # with open("gnutella_mv_.txt", 'w') as f1:
-    #     for K in [50]:
-    #         print 'K', K
-    #         # greedy algorithm
-    #         start = time.time()
-    #         F = greedy(G, B, Q, Ef, S, Phi, K, I)
-    #         # F = selected_greedy[:K]
-    #         finish = time.time() - start
-    #         # f1.write("{}".format(finish))
-    #         print 'Greedy:', F, finish
-            # greedy_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-            # print 'Greedy spread:', greedy_spread
-            # f1.write("{} ".format(greedy_spread))
-            # f1.write(" ".join(sorted(F)))
-            # f1.write("\n")
-
-            # with open('datasets/gnutella_greedy_selected2_wc.txt', 'w') as f:
-            #     f.write(" ".join(F))
-
-            # # EU algorithm
-            # start = time.time()
-            # F2 = explore_update(G, B, Q, S, K, Ef, 1./40)
-            # # F2 = selected_eu[:K]
-            # finish = time.time() - start
-            # # f1.write("{} ".format(finish))
-            # print 'EU', sorted(F2), time.time() - start
-            # start = time.time()
-            # eu_spread = calculate_spread(G, B, Q, S, F2, Ef, I)
-            # print 'EU spread:', eu_spread, time.time() - start
-            # f1.write("{} ".format(eu_spread))
-            # f1.write(" ".join(sorted(F2)))
-            # f1.write("\n")
-            #
-            # # with open('datasets/gnutella_eu_selected2_wc.txt', 'w') as f:
-            # #     f.write(" ".join(F2))
-            #
-            # # top edges
-            # start = time.time()
-            # F = map(lambda (k, v): k, sorted(Ef.items(), key= lambda (k, v): len(v), reverse=True)[:K])
-            # finish = time.time() - start
-            # # f2.write("{} ".format(finish))
-            # print 'Top edges:', sorted(F), time.time() - start
-            # tope_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-            # print 'Top edges spread:', tope_spread
-            # f1.write("{} ".format(tope_spread))
-            # f1.write(" ".join(sorted(F)))
-            # f1.write("\n")
-            # #
-            # # # top nodes
-            # start = time.time()
-            # F = map(lambda (k, v): k, Counter(chain.from_iterable(Nf.values())).most_common(K))
-            # finish = time.time() - start
-            # # f2.write("{}\n".format(finish))
-            # print 'Top nodes:', sorted(F), time.time() - start
-            # topn_spread = calculate_spread(G, B, Q, S, F, Ef, I)
-            # print 'Top nodes spread:', topn_spread
-            # f1.write("{}".format(topn_spread))
-            # f1.write(" ".join(sorted(F)))
-            # f1.write("\n")
-    # print calculate_spread(G, S, B, Q, F, Ef, 100)
-    # print calculate_spread(G, S, B, Q, F2, Ef, 100)
-
-
-
-
-    # theta = 1./2000
-    # S = [0, 5, 10]
     # start = time.time()
-    # Ain = explore(G, P, S, theta)
-    # print time.time() - start
-    # print len(Ain)
+    # F = top_edges(Ef, K)
+    # finish = time.time()
+    # with open("datasets/experiment1_10000/{}/gnutella_time.txt".format(model), "a") as f:
+    #     f.write("{}\n".format(finish - start))
+    # spread = calculate_spread(G, B, Q, S, F, Ef, I)
+    # with open("datasets/experiment1_10000/{}/gnutella_spread.txt".format(model), "a") as f:
+    #     f.write("{}\n".format(spread))
+    # with open("datasets/experiment1_10000/{}/gnutella_tope_features.txt".format(model), "w") as f:
+    #     f.write("\n".join(F))
     #
-    # print update(Ain, S, P)
-    # print calculate_MC_spread(G, S, P, 10)
+    # start = time.time()
+    # F = top_nodes(Nf, K)
+    # finish = time.time()
+    # with open("datasets/experiment1_10000/{}/gnutella_time.txt".format(model), "a") as f:
+    #     f.write("{}\n".format(finish - start))
+    # spread = calculate_spread(G, B, Q, S, F, Ef, I)
+    # with open("datasets/experiment1_10000/{}/gnutella_spread.txt".format(model), "a") as f:
+    #     f.write("{}\n".format(spread))
+    # with open("datasets/experiment1_10000/{}/gnutella_topn_features.txt".format(model), "w") as f:
+    #     f.write("\n".join(F))
 
     console = []
