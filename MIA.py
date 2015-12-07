@@ -256,9 +256,9 @@ def calculate_ap(u, Ain_v, S, P):
             prod *= (1 - ap_w*float(P.loc[e]))
         return 1 - prod
 
-def calculate_ap2(Ain, S, P):
+def calculate_ap2(Ain_v, S, P):
 
-    top_sort = nx.algorithms.topological_sort(Ain)
+    top_sort = nx.algorithms.topological_sort(Ain_v)
 
     ap = dict()
     for u in top_sort:
@@ -266,7 +266,7 @@ def calculate_ap2(Ain, S, P):
             ap[u] = 1
         else:
             prod = 1
-            for e in Ain.in_edges(u):
+            for e in Ain_v.in_edges(u):
                 prod *= (1 - ap[e[0]]*float(P.loc[e]))
             ap[u] = 1 - prod
     return 1 - prod
@@ -363,6 +363,30 @@ def explore_update(G, B, Q, S, K, Ef, theta):
             raise ValueError, 'Not found max_feature. F: {}'.format(F)
     print 'Total number of omissions', count
     return F
+
+def estimate(G, P, S, theta):
+    """
+    Estimate spread using maximimal path of at least theta probability.
+    :param G: networkx graph
+    :param P: dataframe of edge probabilities
+    :param S: list seed set
+    :param theta: float parameter controlling size of arborescence
+    :return:
+    """
+    ap = {u: 1 for u in S}
+    crossing_edges = set(G.out_edges(S))
+    Pi = set(S)
+
+    while crossing_edges:
+        max_edge = max(crossing_edges, key = lambda e: 1 - (1-ap.get(e[1], 0))*(1-ap[e[0]]*float(P.loc[e])))
+        max_dist = 1 - (1-ap.get(max_edge[1], 0))*(1-ap[max_edge[0]]*float(P.loc[max_edge]))
+        if max_dist > theta:
+            ap[max_edge[1]] = max_dist
+            Pi.add(max_edge[1])
+            crossing_edges.remove(max_edge)
+        else:
+            break
+    return sum(ap.values()), Pi
 
 def calculate_spread(G, B, Q, S, F, Ef, I):
     """
@@ -461,7 +485,7 @@ if __name__ == "__main__":
         G.remove_edges_from(G.in_edges(node))
     I = 10000
     K = 51
-    theta = 1./40
+    theta = 1./320
 
     total = 0
     start = time.time()
@@ -474,7 +498,12 @@ if __name__ == "__main__":
     finish = time.time()
     total += finish - start
     print finish - start, spread
+    print total
 
+    start = time.time()
+    spread, Pi = estimate(G, P, S, theta)
+    finish = time.time()
+    print finish - start, spread
 
     # start = time.time()
     # T = 0
