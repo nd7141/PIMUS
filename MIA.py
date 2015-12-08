@@ -347,6 +347,7 @@ def explore_update(G, B, Q, S, K, Ef, theta):
                 changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
                 Ain = explore(G, P, S, theta)
                 spread = update(Ain, S, P)
+                print "Lower bound:", spread, max_lb(G, P, S, theta)
                 if spread > max_spread:
                     max_spread = spread
                     max_feature = f
@@ -364,29 +365,81 @@ def explore_update(G, B, Q, S, K, Ef, theta):
     print 'Total number of omissions', count
     return F
 
-def estimate(G, P, S, theta):
-    """
-    Estimate spread using maximimal path of at least theta probability.
-    :param G: networkx graph
-    :param P: dataframe of edge probabilities
-    :param S: list seed set
-    :param theta: float parameter controlling size of arborescence
-    :return:
-    """
-    ap = {u: 1 for u in S}
-    crossing_edges = set(G.out_edges(S))
-    Pi = set(S)
+def max_lb(G, P, S, theta):
+    max_dist = dict()
+    Pi_nodes = set()
+    for v in S:
+        crossing_edges = set([out_edge for out_edge in G.out_edges([v]) if out_edge[1] not in S + [v]])
+        dist = {v: 1} # most probable path from v
+        reachable = set()
 
-    while crossing_edges:
-        max_edge = max(crossing_edges, key = lambda e: 1 - (1-ap.get(e[1], 0))*(1-ap[e[0]]*float(P.loc[e])))
-        max_dist = 1 - (1-ap.get(max_edge[1], 0))*(1-ap[max_edge[0]]*float(P.loc[max_edge]))
-        if max_dist > theta:
-            ap[max_edge[1]] = max_dist
-            Pi.add(max_edge[1])
-            crossing_edges.remove(max_edge)
-        else:
-            break
-    return sum(ap.values()), Pi
+        while crossing_edges:
+            # Dijkstra's greedy criteria
+            d = 0
+            sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
+            for edge in sorted_crossing_edges:
+                # print 'dist', dist[edge[0]]*float(P.loc[edge]), d
+                if dist[edge[0]]*float(P.loc[edge]) > d:
+                    d = dist[edge[0]]*float(P.loc[edge])
+                    max_edge = edge
+            # check stopping criteria
+            if d > theta:
+                dist[max_edge[1]] = d
+                reachable.add(max_edge[1])
+                Pi_nodes.add(max_edge[1])
+                # selecting probability
+                if dist[max_edge[1]] > max_dist.get(max_edge[1], 0):
+                    max_dist[max_edge[1]] = dist[max_edge[1]]
+                # update crossing edges
+                crossing_edges.difference_update(G.in_edges(max_edge[1]))
+                crossing_edges.update([out_edge for out_edge in G.out_edges(max_edge[1])
+                                       if (out_edge[1] not in reachable) and (out_edge[1] not in S)])
+            else:
+                break
+    return sum(max_dist.values())
+
+# def eu_plus(G, B, Q, S, K, Ef, theta):
+#     P = B.copy() # initialize edge probabilities
+#
+#     _, Pi_nodes = estimate(G, P, S, theta)
+#     Pi = set()
+#     for u in Pi_nodes:
+#         Pi.update(G.in_edges(u))
+#         Pi.update(G.out_edges(u))
+#
+#     F = []
+#     Phi = set(Ef.keys())
+#
+#     count = 0
+#     while len(F) < K:
+#         print '***************len(F): {} --> '.format(len(F)),
+#         max_feature = None
+#         max_spread = -1
+#         for f in Phi.difference(F):
+#             print f,
+#             e_intersection = Pi.intersection(Ef[f])
+#             # print 'intersection', len(e_intersection)
+#             if e_intersection:
+#                 changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
+#                 spread, _ = estimate(G, P, S, theta)
+#                 if spread > max_spread:
+#                     max_spread = spread
+#                     max_feature = f
+#                 decrease_probabilities(changed, P)
+#             else:
+#                 count += 1
+#         if max_feature:
+#             F.append(max_feature)
+#             increase_probabilities(G, B, Q, F, Ef[max_feature], P)
+#             _, Pi = estimate(G, P, S, theta)
+#             Pi = set()
+#             for u in Pi_nodes:
+#                 Pi.update(G.in_edges(u))
+#                 Pi.update(G.out_edges(u))
+#         else:
+#             raise ValueError, 'Not found max_feature. F: {}'.format(F)
+#     print 'Total number of omissions', count
+#     return F
 
 def calculate_spread(G, B, Q, S, F, Ef, I):
     """
@@ -483,27 +536,19 @@ if __name__ == "__main__":
     S = groups['2']
     for node in S:
         G.remove_edges_from(G.in_edges(node))
-    I = 10000
+    I = 100
     K = 51
-    theta = 1./320
+    theta = 1./40
 
-    total = 0
-    start = time.time()
-    Ain = explore(G, P, S, theta)
-    finish = time.time()
-    total += finish - start
-    print finish - start
-    start = time.time()
-    spread = update(Ain, S, P)
-    finish = time.time()
-    total += finish - start
-    print finish - start, spread
-    print total
+    # start = time.time()
+    # F = explore_update(G, B, Q, S, K, Ef, theta)
+    # finish = time.time()
+    # print F, finish - start, calculate_spread(G, B, Q, S, F, Ef, I)
 
     start = time.time()
-    spread, Pi = estimate(G, P, S, theta)
+    F = explore_update(G, B, Q, S, K, Ef, theta)
     finish = time.time()
-    print finish - start, spread
+    print F, finish - start, calculate_spread(G, B, Q, S, F, Ef, I)
 
     # start = time.time()
     # T = 0
