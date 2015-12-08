@@ -347,7 +347,6 @@ def explore_update(G, B, Q, S, K, Ef, theta):
                 changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
                 Ain = explore(G, P, S, theta)
                 spread = update(Ain, S, P)
-                print "Lower bound:", spread, max_lb(G, P, S, theta)
                 if spread > max_spread:
                     max_spread = spread
                     max_feature = f
@@ -388,58 +387,60 @@ def max_lb(G, P, S, theta):
                 reachable.add(max_edge[1])
                 Pi_nodes.add(max_edge[1])
                 # selecting probability
-                if dist[max_edge[1]] > max_dist.get(max_edge[1], 0):
-                    max_dist[max_edge[1]] = dist[max_edge[1]]
+                max_dist.setdefault(max_edge[1], []).append(dist[max_edge[1]])
                 # update crossing edges
                 crossing_edges.difference_update(G.in_edges(max_edge[1]))
                 crossing_edges.update([out_edge for out_edge in G.out_edges(max_edge[1])
                                        if (out_edge[1] not in reachable) and (out_edge[1] not in S)])
             else:
                 break
-    return sum(max_dist.values())
 
-# def eu_plus(G, B, Q, S, K, Ef, theta):
-#     P = B.copy() # initialize edge probabilities
-#
-#     _, Pi_nodes = estimate(G, P, S, theta)
-#     Pi = set()
-#     for u in Pi_nodes:
-#         Pi.update(G.in_edges(u))
-#         Pi.update(G.out_edges(u))
-#
-#     F = []
-#     Phi = set(Ef.keys())
-#
-#     count = 0
-#     while len(F) < K:
-#         print '***************len(F): {} --> '.format(len(F)),
-#         max_feature = None
-#         max_spread = -1
-#         for f in Phi.difference(F):
-#             print f,
-#             e_intersection = Pi.intersection(Ef[f])
-#             # print 'intersection', len(e_intersection)
-#             if e_intersection:
-#                 changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
-#                 spread, _ = estimate(G, P, S, theta)
-#                 if spread > max_spread:
-#                     max_spread = spread
-#                     max_feature = f
-#                 decrease_probabilities(changed, P)
-#             else:
-#                 count += 1
-#         if max_feature:
-#             F.append(max_feature)
-#             increase_probabilities(G, B, Q, F, Ef[max_feature], P)
-#             _, Pi = estimate(G, P, S, theta)
-#             Pi = set()
-#             for u in Pi_nodes:
-#                 Pi.update(G.in_edges(u))
-#                 Pi.update(G.out_edges(u))
-#         else:
-#             raise ValueError, 'Not found max_feature. F: {}'.format(F)
-#     print 'Total number of omissions', count
-#     return F
+
+    return sum(map(lambda l: max(l), max_dist.values())), Pi_nodes
+
+def eu_plus(G, B, Q, S, K, Ef, theta):
+    P = B.copy() # initialize edge probabilities
+
+    _, Pi_nodes = max_lb(G, P, S, theta)
+    Pi = set()
+    for u in Pi_nodes:
+        Pi.update(G.in_edges(u))
+        Pi.update(G.out_edges(u))
+
+    F = []
+    Phi = set(Ef.keys())
+
+    count = 0
+    while len(F) < K:
+        print '***************len(F): {} --> '.format(len(F)),
+        max_feature = None
+        max_spread = -1
+        for f in Phi.difference(F):
+            print f,
+            e_intersection = Pi.intersection(Ef[f])
+            # print 'intersection', len(e_intersection)
+            if e_intersection:
+                changed = increase_probabilities(G, B, Q, F + [f], Ef[f], P)
+                spread, _ = max_lb(G, P, S, theta)
+                if spread > max_spread:
+                    max_spread = spread
+                    max_feature = f
+                decrease_probabilities(changed, P)
+            else:
+                count += 1
+        if max_feature:
+            F.append(max_feature)
+            increase_probabilities(G, B, Q, F, Ef[max_feature], P)
+            _, Pi_nodes = max_lb(G, P, S, theta)
+            Pi = set()
+            for u in Pi_nodes:
+                Pi.update(G.in_edges(u))
+                Pi.update(G.out_edges(u))
+        else:
+            raise ValueError, 'Not found max_feature. F: {}'.format(F)
+        print
+    print 'Total number of omissions', count
+    return F
 
 def calculate_spread(G, B, Q, S, F, Ef, I):
     """
@@ -537,13 +538,13 @@ if __name__ == "__main__":
     for node in S:
         G.remove_edges_from(G.in_edges(node))
     I = 100
-    K = 51
+    K = 10
     theta = 1./40
 
-    # start = time.time()
-    # F = explore_update(G, B, Q, S, K, Ef, theta)
-    # finish = time.time()
-    # print F, finish - start, calculate_spread(G, B, Q, S, F, Ef, I)
+    start = time.time()
+    F = eu_plus(G, B, Q, S, K, Ef, theta)
+    finish = time.time()
+    print F, finish - start, calculate_spread(G, B, Q, S, F, Ef, I)
 
     start = time.time()
     F = explore_update(G, B, Q, S, K, Ef, theta)
