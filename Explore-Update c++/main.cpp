@@ -9,6 +9,7 @@
 #include <boost/graph/topological_sort.hpp>
 #include <unordered_map>
 #include <ctime>
+#include <tuple>
 
 using namespace std;
 
@@ -22,8 +23,9 @@ typedef boost::graph_traits<DiGraph>::vertex_iterator vertex_iter;
 typedef boost::graph_traits<DiGraph>::edge_iterator edge_iter;
 typedef boost::graph_traits<DiGraph>::out_edge_iterator out_edge_iter;
 typedef boost::graph_traits<DiGraph>::in_edge_iterator in_edge_iter;
-typedef map<pair<int, int>, double> edge_prob;
+typedef boost::unordered_map<pair<int, int>, double> edge_prob;
 typedef map<edge_t, double> prob_e;
+typedef vector<tuple<int, int, double> > edge_info;
 
 void print_vertices(DiGraph G) {
     pair<vertex_iter, vertex_iter> vp;
@@ -144,6 +146,24 @@ void read_probabilities(string prob_filename, edge_prob &P) {
     }
 }
 
+void read_probabilities2 (string prob_filename, vector<pair<int, int> > &order, vector<double> &P) {
+    vector<vector<double> > edges;
+    ifstream infile(prob_filename);
+    if (infile==NULL){
+        cout << "Unable to open the input file\n";
+    }
+    double u, v, p;
+
+    while (infile >> u >> v >> p) {
+        edges.push_back({u, v, p});
+    }
+    sort(edges.begin(), edges.end());
+
+    for (auto &edge: edges) {
+        order.push_back(make_pair((int) edge[0], (int) edge[1]));
+        P.push_back(edge[2]);
+    }
+}
 
 void read_groups(string group_filename, unordered_map<int, unordered_set<int> > &groups) {
     ifstream infile(group_filename);
@@ -193,7 +213,7 @@ void decrease_probabilities(edge_prob changed, edge_prob &P) {
     }
 }
 
-double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, unordered_map<int, vector<int> > Nf, set<int> S,
+double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, unordered_map<int, vector<int> > Nf, unordered_set<int> S,
                         vector<int> F, unordered_map<int, vector<pair<int, int> > > Ef, int I) {
 
     edge_prob Prob;
@@ -246,7 +266,7 @@ double calculate_spread (DiGraph G, edge_prob B, edge_prob Q, unordered_map<int,
     return spread/I;
 }
 
-pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, set<int> S, unordered_map<int,
+pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, edge_prob B, edge_prob Q, unordered_set<int> S, unordered_map<int,
         vector<int> > Nf, unordered_map<int, vector<pair<int, int> > > Ef, vector<int> Phi, int K, int I) {
 
     vector<int> F;
@@ -451,7 +471,7 @@ double calculate_ap3(set<pair<int, int> >& Ain_edges_v, unordered_set<int> S, ed
 }
 
 double update(unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set<int> S, edge_prob P) {
-    double total = 0, path_prob;
+    double total = 0, count=0, path_prob;
     unordered_set<int> mip;
     bool pathed;
     unordered_map <int, double> ap_values;
@@ -471,13 +491,16 @@ double update(unordered_map<int, set<pair<int, int> > > Ain_edges, unordered_set
             }
         }
         if (pathed) {
+            count++;
+            cout << item.first << " " << path_prob << endl;
             total += path_prob;
         }
         else {
             SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
-            total += calculate_ap(0, Ain_v, S, P);
+            total += calculate_ap2(Ain_v, S, P);
         }
     }
+    cout << "Skipped: " << count << endl;
     return total;
 }
 
@@ -527,7 +550,6 @@ vector<int> explore_update(DiGraph G, edge_prob B, edge_prob Q, edge_prob P, uno
         max_feature = -1;
         max_spread = -1;
         for (auto &f: Phi) {
-            cout << f << " ";
             fflush(stdout);
             if (not selected[f]) {
                 intersected = false;
@@ -606,6 +628,42 @@ vector<int> top_nodes(unordered_map<int, vector<int> > Nf, int K) {
     }
 }
 
+double test(SubGraph Ain_v, edge_prob P, unordered_set<int> S) {
+    vector<vertex_t> topology;
+    unordered_map<vertex_t, double> ap;
+    double prod=1, p, active_p;
+    in_edge_iter qi, q_end;
+    pair<int, int> e;
+    clock_t start, finish;
+
+    topological_sort(Ain_v, back_inserter(topology));
+
+    for (vector<vertex_t>::reverse_iterator ii=topology.rbegin(); ii!=topology.rend(); ++ii) {
+        if (S.find(Ain_v[*ii].label) != S.end()) {
+            ap[*ii] = 1;
+        }
+        else {
+            for (boost::tie(qi, q_end) = in_edges(*ii, Ain_v); qi != q_end; ++qi) {
+                start = clock();
+                e = make_pair(Ain_v[source(*qi, Ain_v)].label, Ain_v[*ii].label);
+                finish = clock();
+//                cout << "Make pair: " << (double) (finish - start)/CLOCKS_PER_SEC << endl;
+                start = clock();
+                p = P[e];
+                finish = clock();
+//                cout << "Get p: " << (double) (finish - start)/CLOCKS_PER_SEC<< endl;
+                start = clock();
+                active_p = ap[source(*qi, Ain_v)];
+                finish = clock();
+//                cout << "Get active_p: " << (double) (finish - start)/CLOCKS_PER_SEC << endl;
+                prod *= (1 - active_p*p);
+            }
+            ap[*ii] = 1 - prod;
+        }
+    }
+    return 1 - prod;
+}
+
 int main(int argc, char* argv[]) {
     srand(time(NULL));
     // read parameters from command-line
@@ -625,12 +683,13 @@ int main(int argc, char* argv[]) {
     unordered_map<int, double> influence;
     double theta;
     in_edge_iter qi, q_end;
+    clock_t start, finish;
 
     DiGraph G = read_graph("datasets/gnutella.txt");
     read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
     read_probabilities("datasets/gnutella_mv.txt", B);
     read_probabilities("datasets/gnutella_mv.txt", Q);
-    read_probabilities("datasets/gnutella_mv.txt", P);
+//    read_probabilities("datasets/gnutella_mv.txt", P);
     read_groups("datasets/gnutella_com.txt", groups);
 
     vector<int> Phi;
@@ -643,56 +702,118 @@ int main(int argc, char* argv[]) {
     for (auto &node: S) {
         boost::clear_in_edges(node, G);
     }
-    I = 100;
-    K = 2;
+    I = 10000;
+    K = 51;
     theta = 1./320;
+    double spread;
     cout << "I: " << I << endl;
     cout << "K: " << K << endl;
+    FILE* timefile, * outfile;
+    ifstream infile;
+    string filename;
+    int f;
 
-//    greedy algorithm
-//    clock_t begin = clock();
-//    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
-//    clock_t finish = clock();
-//    printf("Time = %.4f sec.", (double) (finish - begin)/CLOCKS_PER_SEC);
-//    cout << " F = ";
-//    for (int i = 0; i < F.size(); ++i)
-//        cout << F[i] << " ";
-//    cout << endl;
-//    for (auto &item: influence) {
-//        printf("%i %f\n", item.first, item.second);
+    vector<pair<int, int> > order;
+    vector<double> P2;
+
+    read_probabilities2("datasets/gnutella_mv.txt", order, P2);
+
+//    for (int i = 0; i < order.size(); ++i) {
+//        cout << order[i].first << " " << order[i].second << ": " << P2[i] << endl;
 //    }
 
-//    unordered_map<int, set<pair<int, int> > > Ain_edges;
-//    clock_t begin, finish;
-//    begin = clock();
-//    Ain_edges = explore(G, P, S, theta);
-//    begin = clock();
-//    double total = update(Ain_edges, S, P);
-//    finish = clock();
-//    cout << (double) (finish - begin)/(CLOCKS_PER_SEC) << " " << total << endl;
+    int ix = lower_bound(order.begin(), order.end(), make_pair(0, 4)) - order.begin();
+    cout << P2[ix] << endl;
 
-//    cout << "Start explore-update" << endl;
-//    clock_t start;
+
+//    testing performance of calculate ap
 //    start = clock();
-//    F = explore_update(G, B, Q, P, S, Nf, Ef, Phi, K, theta);
-//    cout << "Time Explore-Update: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
-//    for (auto &f: F)
+//    double T=0;
+//    for (auto &item: Ain_edges) {
+//        SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
+//        T += test(Ain_v, P, S);
+//    }
+//    finish = clock();
+//    cout << (double) (finish - start)/CLOCKS_PER_SEC << " " << T << endl;
+
+
+//    string f1 = "results/Experiment1_mv/time.txt";
+//    timefile = fopen(f1.c_str(), "w");
+//    cout << "Start greedy algorithm..." << endl;
+//    begin = clock();
+//    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
+//    finish = clock();
+//    fprintf(timefile, "%f\n", (double) (finish - begin)/CLOCKS_PER_SEC);
+//    outfile = fopen("results/Experiment1_mv/greedy_spread.txt", "w");
+//    for (int num = 1; num <= K; ++num) {
+//        fprintf(outfile, "%f\n", influence[num]);
+//    }
+//    outfile = fopen("results/Experiment1_mv/greedy_features.txt", "w");
+//    for (auto &f: F) {
+//        fprintf(outfile, "%i ", f);
 //        cout << f << " ";
+//    }
 //    cout << endl;
 
+//    calculate spread for range for Explore-Update and other heuristics
+//    cout << "Start explore-update" << endl;
+//    filename = "results/experiment1_10000/mv/gnutella_eu_features.txt";
+//    infile.open(filename);
+//    if (infile == NULL)
+//        cout << "Cannot open file" << endl;
+//    while (infile >> f) {
+//        F.push_back(f);
+//    }
+//    outfile = fopen("results/experiment1_10000/mv/gnutella_eu_spread.txt", "w");
+//    for (int num = 0; num <= K; num+=5) {
+//        vector<int> subv(F.begin(), F.begin()+num);
+//        spread = calculate_spread(G, B, Q, Nf, S, subv, Ef, I);
+//        fprintf(outfile, "%f\n", spread);
+//        cout << num << ": " << spread << endl;
+//    }
+//    fclose(outfile);
+//    F.clear();
+//    infile.close();
+//
 //    cout << "Start Top-Edges..." << endl;
-//    clock_t start;
-//    F = top_edges(Ef, K);
-//    cout << "Spent time: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
-//    for (auto &f: F)
-//        cout << f << " ";
-
-    cout << "Start Top-Nodes..." << endl;
-    clock_t start;
-    F = top_nodes(Nf, K);
-    cout << "Spent time: " << (double) (clock() - start)/(CLOCKS_PER_SEC) << endl;
-    for (auto &f: F)
-        cout << f << " ";
+//    filename = "results/experiment1_10000/mv/gnutella_tope_features.txt";
+//    infile.open(filename);
+//    if (infile == NULL)
+//        cout << "Cannot open file" << endl;
+//    while (infile >> f) {
+//        F.push_back(f);
+//    }
+//    outfile = fopen("results/experiment1_10000/mv/gnutella_tope_spread.txt", "w");
+//    for (int num = 0; num <= K; num+=5) {
+//        vector<int> subv(F.begin(), F.begin()+num);
+//        spread = calculate_spread(G, B, Q, Nf, S, subv, Ef, I);
+//        fprintf(outfile, "%f\n", spread);
+//        cout << num << ": " << spread << endl;
+//    }
+//    fclose(outfile);
+//    F.clear();
+//    infile.close();
+//
+//    cout << "Start Top-Nodes..." << endl;
+//    filename = "results/experiment1_10000/mv/gnutella_topn_features.txt";
+//    infile.open(filename);
+//    if (infile == NULL)
+//        cout << "Cannot open file" << endl;
+//    while (infile >> f) {
+//        F.push_back(f);
+//    }
+//    outfile = fopen("results/experiment1_10000/mv/gnutella_topn_spread.txt", "w");
+//    for (int num = 0; num <= K; num+=5) {
+//        vector<int> subv(F.begin(), F.begin()+num);
+//        spread = calculate_spread(G, B, Q, Nf, S, subv, Ef, I);
+//        fprintf(outfile, "%f\n", spread);
+//        cout << num << ": " << spread << endl;
+//    }
+//    F.clear();
+//    infile.close();
+//    fclose(outfile);
+//
+//    fclose(timefile);
 
     return 0;
 }
