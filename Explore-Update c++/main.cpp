@@ -284,6 +284,8 @@ pair<vector<int>, unordered_map<int, double> >  greedy(DiGraph G, edge_prob B, e
         printf("it = %i; ", (int)F.size() + 1);
         fflush(stdout);
         for (auto &f: Phi) {
+            cout << f << " ";
+            fflush(stdout);
             if (not selected[f]) {
                 F.push_back(f);
                 changed = increase_probabilities(G, B, Q, Nf, F, Ef[f], P);
@@ -666,12 +668,6 @@ double test(SubGraph Ain_v, edge_prob P, unordered_set<int> S) {
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
-    // read parameters from command-line
-    if (argc > 1) {
-        const string path = argv[1]; // prefix path to directory with necessary files
-        const long int V = atoi(argv[2]); // number of nodes
-        const int K = atoi(argv[4]);         // number of features
-    }
 
     unordered_map<int, vector<int> > Nf;
     unordered_map<int, vector<pair<int, int> > > Ef;
@@ -679,81 +675,79 @@ int main(int argc, char* argv[]) {
     unordered_map<int, unordered_set<int> > groups;
     vector<int> F;
     unordered_set<int> S;
-    int I, K;
+    int I, K, group_number;
     unordered_map<int, double> influence;
-    double theta;
+    double theta = 1./320, spread=0;
     in_edge_iter qi, q_end;
     clock_t start, finish;
+    string dataset_file, probs_file, features_file, groups_file, out_features_file, out_results_file;
 
-    DiGraph G = read_graph("datasets/gnutella.txt");
-    read_features("datasets/gnutella_mem.txt", G, Nf, Ef);
-    read_probabilities("datasets/gnutella_mv.txt", B);
-    read_probabilities("datasets/gnutella_mv.txt", Q);
-//    read_probabilities("datasets/gnutella_mv.txt", P);
-    read_groups("datasets/gnutella_com.txt", groups);
+    // read parameters from command-line
+    if (argc > 1) {
+        dataset_file = argv[1];
+        probs_file = argv[2];
+        features_file = argv[3];
+        groups_file = argv[4];
+        out_features_file = argv[5];
+        out_results_file = argv[6];
+
+        group_number = atoi(argv[7]);
+        K = atoi(argv[8]);
+        I = atoi(argv[9]);
+    }
+    else {
+        dataset_file = "datasets/gnutella.txt";
+        probs_file = "datasets/gnutella_mv.txt";
+        features_file = "datasets/gnutella_mem.txt";
+        groups_file = "datasets/gnutella_com.txt";
+        out_features_file = "datasets/gnutella_feat.txt";
+        out_results_file = "datasets/gnutella_results.txt";
+
+        group_number = 2;
+        K = 2;
+        I = 1;
+    }
+
+    DiGraph G = read_graph(dataset_file);
+    read_features(features_file, G, Nf, Ef);
+    read_probabilities(probs_file, B);
+    read_probabilities(probs_file, Q);
+    read_probabilities(probs_file, P);
+    read_groups(groups_file, groups);
 
     vector<int> Phi;
     for (auto &item: Ef) {
         Phi.push_back(item.first);
     }
-
-//    setup
-    S = groups[2];
+    S = groups[group_number];
     for (auto &node: S) {
         boost::clear_in_edges(node, G);
     }
-    I = 10000;
-    K = 51;
-    theta = 1./320;
-    double spread;
+
     cout << "I: " << I << endl;
     cout << "K: " << K << endl;
-    FILE* timefile, * outfile;
-    ifstream infile;
-    string filename;
-    int f;
+    FILE *results_f, *outfile;
 
-    vector<pair<int, int> > order;
-    vector<double> P2;
-
-    read_probabilities2("datasets/gnutella_mv.txt", order, P2);
-
-//    for (int i = 0; i < order.size(); ++i) {
-//        cout << order[i].first << " " << order[i].second << ": " << P2[i] << endl;
-//    }
-
-    int ix = lower_bound(order.begin(), order.end(), make_pair(0, 4)) - order.begin();
-    cout << P2[ix] << endl;
-
-
-//    testing performance of calculate ap
-//    start = clock();
-//    double T=0;
-//    for (auto &item: Ain_edges) {
-//        SubGraph Ain_v = make_subgraph(Ain_edges[item.first], item.first);
-//        T += test(Ain_v, P, S);
-//    }
-//    finish = clock();
-//    cout << (double) (finish - start)/CLOCKS_PER_SEC << " " << T << endl;
-
-
-//    string f1 = "results/Experiment1_mv/time.txt";
-//    timefile = fopen(f1.c_str(), "w");
-//    cout << "Start greedy algorithm..." << endl;
-//    begin = clock();
-//    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
-//    finish = clock();
-//    fprintf(timefile, "%f\n", (double) (finish - begin)/CLOCKS_PER_SEC);
-//    outfile = fopen("results/Experiment1_mv/greedy_spread.txt", "w");
-//    for (int num = 1; num <= K; ++num) {
-//        fprintf(outfile, "%f\n", influence[num]);
-//    }
-//    outfile = fopen("results/Experiment1_mv/greedy_features.txt", "w");
-//    for (auto &f: F) {
-//        fprintf(outfile, "%i ", f);
-//        cout << f << " ";
-//    }
-//    cout << endl;
+    cout << "Start greedy algorithm..." << endl;
+    start = clock();
+    boost::tie(F, influence) = greedy(G, B, Q, S, Nf, Ef, Phi, K, I);
+    finish = clock();
+//    writing selected features, time, and spread
+    results_f = fopen(out_results_file.c_str(), "w");
+    outfile = fopen(out_features_file.c_str(), "w");
+    cout << "Features: ";
+    for (auto &f: F) {
+        fprintf(outfile, "%i ", f);
+        cout << f << " ";
+    }
+    cout << endl;
+    fprintf(results_f, "%f\n", (double) (finish - start)/CLOCKS_PER_SEC);
+    cout << (double) (finish - start)/CLOCKS_PER_SEC << " sec." << endl;
+    for (int num = 1; num <= K; ++num) {
+        fprintf(results_f, "%f\n", influence[num]);
+        cout << num << ": " << influence[num]  << " spread" << endl;
+    }
+    cout << endl;
 
 //    calculate spread for range for Explore-Update and other heuristics
 //    cout << "Start explore-update" << endl;
